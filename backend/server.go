@@ -267,10 +267,10 @@ func (s *Server) handleAddSource(c *gin.Context) {
 	notebookID := c.Param("id")
 
 	var req struct {
-		Name    string                 `json:"name" binding:"required"`
-		Type    string                 `json:"type" binding:"required"`
-		URL     string                 `json:"url"`
-		Content string                 `json:"content"`
+		Name     string                 `json:"name" binding:"required"`
+		Type     string                 `json:"type" binding:"required"`
+		URL      string                 `json:"url"`
+		Content  string                 `json:"content"`
 		Metadata map[string]interface{} `json:"metadata"`
 	}
 
@@ -391,7 +391,7 @@ func (s *Server) handleUpload(c *gin.Context) {
 
 			// Update source with chunk count
 			source.ChunkCount = chunkCount
-			
+
 			// Update in database
 			s.store.UpdateSourceChunkCount(ctx, source.ID, chunkCount)
 		}
@@ -518,7 +518,9 @@ func (s *Server) handleTransform(c *gin.Context) {
 
 	// If type is infograph, generate the image as well
 	if req.Type == "infograph" {
-		imagePath, err := s.agent.GenerateInfographImage(ctx, response.Content)
+		extra := "**注意：无论来源是什么语言，请务必使用中文**"
+		prompt := response.Content + "\n\n" + extra
+		imagePath, err := s.agent.GenerateInfographImage(ctx, "gemini-3-pro-image-preview", prompt)
 		if err != nil {
 			golog.Errorf("failed to generate infographic image: %v", err)
 			metadata["image_error"] = err.Error()
@@ -526,6 +528,32 @@ func (s *Server) handleTransform(c *gin.Context) {
 			// Convert local path to web path
 			webPath := "/uploads/" + filepath.Base(imagePath)
 			metadata["image_url"] = webPath
+		}
+	}
+
+	// If type is ppt, generate images for each slide
+	if req.Type == "ppt" {
+		slides := s.agent.ParsePPTSlides(response.Content)
+		if len(slides) > 20 {
+			golog.Errorf("ppt contains too many slides (%d), maximum allowed is 20. skipping image generation.", len(slides))
+			metadata["image_error"] = "PPT页数超过20页上限，已停止生成图片"
+		} else {
+			var slideURLs []string
+			golog.Infof("generating %d slides for ppt...", len(slides))
+
+			for i, slide := range slides {
+				golog.Infof("generating image for slide %d/%d...", i+1, len(slides))
+				// Combine style and slide content for the image generator
+				prompt := fmt.Sprintf("Style: %s\n\nSlide Content: %s", slides[0].Style, slide.Content)
+				prompt += "\n\n**注意：无论来源是什么语言，请务必使用英文**\n"
+				imagePath, err := s.agent.GenerateInfographImage(ctx, "gemini-2.5-flash-image", prompt)
+				if err != nil {
+					golog.Errorf("failed to generate slide %d: %v", i+1, err)
+					continue
+				}
+				slideURLs = append(slideURLs, "/uploads/"+filepath.Base(imagePath))
+			}
+			metadata["slides"] = slideURLs
 		}
 	}
 
@@ -558,6 +586,7 @@ func getTitleForType(t string) string {
 		"glossary":    "术语表",
 		"quiz":        "测验",
 		"infograph":   "信息图",
+		"ppt":         "PPT大纲",
 	}
 	if title, ok := titles[t]; ok {
 		return title

@@ -1104,6 +1104,89 @@ body {
     transform: scale(1.01);
 }
 
+/* PPT Viewer Styles */
+.ppt-viewer-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin: 1.5rem 0;
+    box-shadow: var(--shadow-lg);
+}
+
+.ppt-slides-wrapper {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.ppt-slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.ppt-slide.active {
+    display: flex;
+}
+
+.ppt-slide img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.ppt-slide-counter {
+    position: absolute;
+    bottom: var(--space-md);
+    right: var(--space-md);
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    padding: 2px 10px;
+    border-radius: var(--radius-full);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+}
+
+.ppt-controls {
+    position: absolute;
+    top: 50%;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    transform: translateY(-50%);
+    padding: 0 var(--space-md);
+    pointer-events: none;
+}
+
+.btn-ppt-nav {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-normal);
+    pointer-events: auto;
+}
+
+.btn-ppt-nav:hover {
+    background: rgba(255, 255, 255, 0.4);
+    transform: scale(1.1);
+}
+
 .infographic-actions {
     display: flex;
     justify-content: center;
@@ -1113,6 +1196,7 @@ body {
 }
 
 .transform-card[data-type="infograph"] { background-color: #fef2f2 !important; color: #991b1b !important; }
+.transform-card[data-type="ppt"] { background-color: #fff7ed !important; color: #9a3412 !important; }
 
 /* 定义角度变量，用于平滑动画 */
 @property --gradient-angle {

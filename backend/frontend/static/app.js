@@ -781,8 +781,34 @@ class OpenNotebook {
                </div>`
             : '';
 
+        // PPT Slider HTML
+        let pptSliderHTML = '';
+        if (note.metadata?.slides && note.metadata.slides.length > 0) {
+            const slides = note.metadata.slides;
+            pptSliderHTML = `
+                <div class="ppt-viewer-container" id="pptViewer">
+                    <div class="ppt-slides-wrapper">
+                        ${slides.map((src, index) => `
+                            <div class="ppt-slide ${index === 0 ? 'active' : ''}" data-index="${index}">
+                                <img src="${src}" alt="Slide ${index + 1}">
+                                <div class="ppt-slide-counter">${index + 1} / ${slides.length}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="ppt-controls">
+                        <button class="btn-ppt-nav prev" id="btnPptPrev">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        </button>
+                        <button class="btn-ppt-nav next" id="btnPptNext">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
         // Determine if we should show the text content
-        const showMarkdownContent = note.type !== 'infograph' || !note.metadata?.image_url;
+        const showMarkdownContent = (note.type !== 'infograph' && note.type !== 'ppt') || (!note.metadata?.image_url && !note.metadata?.slides);
 
         // Show the Note tab button
         const tabBtnNote = document.getElementById('tabBtnNote');
@@ -815,6 +841,7 @@ class OpenNotebook {
                 </div>
                 <div class="note-view-content">
                     ${infographicHTML}
+                    ${pptSliderHTML}
                     <div class="markdown-content" style="${showMarkdownContent ? '' : 'display:none'}">${renderedContent}</div>
                 </div>
             </div>
@@ -822,6 +849,30 @@ class OpenNotebook {
 
         const chatWrapper = document.querySelector('.chat-messages-wrapper');
         chatWrapper.insertAdjacentHTML('afterend', noteViewHTML);
+
+        // PPT Navigation Logic
+        if (note.metadata?.slides) {
+            let currentSlide = 0;
+            const slidesCount = note.metadata.slides.length;
+            const slideElements = document.querySelectorAll('.ppt-slide');
+            
+            const showSlide = (n) => {
+                slideElements[currentSlide].classList.remove('active');
+                currentSlide = (n + slidesCount) % slidesCount;
+                slideElements[currentSlide].classList.add('active');
+            };
+
+            document.getElementById('btnPptPrev').addEventListener('click', () => showSlide(currentSlide - 1));
+            document.getElementById('btnPptNext').addEventListener('click', () => showSlide(currentSlide + 1));
+            
+            // Key navigation
+            const keyHandler = (e) => {
+                if (e.key === 'ArrowLeft') showSlide(currentSlide - 1);
+                if (e.key === 'ArrowRight') showSlide(currentSlide + 1);
+            };
+            document.addEventListener('keydown', keyHandler);
+            // Cleanup handler on container remove? We'll leave it for now or add observer
+        }
 
         // Render Mermaid diagrams if any
         if (window.mermaid) {
@@ -985,7 +1036,7 @@ class OpenNotebook {
         const nameMap = {
             summary: '摘要', faq: '常见问题', study_guide: '学习指南', outline: '大纲',
             podcast: '播客', timeline: '时间线', glossary: '术语表', quiz: '测验',
-            mindmap: '思维导图', infograph: '信息图'
+            mindmap: '思维导图', infograph: '信息图', ppt: 'PPT大纲'
         };
         const typeName = nameMap[type] || '内容';
 

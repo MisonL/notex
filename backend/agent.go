@@ -3,12 +3,13 @@ package backend
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/openai"
 	ollamallm "github.com/tmc/langchaingo/llms/ollama"
+	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/prompts"
 )
 
@@ -59,7 +60,7 @@ func (a *Agent) GenerateTransformation(ctx context.Context, req *TransformationR
 	var sourceContext strings.Builder
 	for i, src := range sources {
 		sourceContext.WriteString(fmt.Sprintf("\n## Source %d: %s\n", i+1, src.Name))
-		
+
 		// Use MaxContextLength from config, or default to a safe large value if not set (or too small)
 		limit := a.cfg.MaxContextLength
 		if limit <= 0 {
@@ -101,12 +102,19 @@ func (a *Agent) GenerateTransformation(ctx context.Context, req *TransformationR
 	}
 
 	// Generate response
-	ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
-	defer cancel()
+	var response string
+	var genErr error
 
-	response, err := llms.GenerateFromSinglePrompt(ctx, a.llm, promptValue)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate response: %w", err)
+	if req.Type == "ppt" {
+		response, genErr = a.GenerateGeminiText(ctx, promptValue, "gemini-3-flash-preview")
+	} else {
+		ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
+		defer cancel()
+		response, genErr = llms.GenerateFromSinglePrompt(ctx, a.llm, promptValue)
+	}
+
+	if genErr != nil {
+		return nil, fmt.Errorf("failed to generate response: %w", genErr)
 	}
 
 	// Build source summaries
@@ -296,6 +304,171 @@ End with "The background is a clean, light gradient suitable for a professional 
 {sources}
 `
 
+	case "ppt":
+		return `# 演示文稿设计指令
+
+## 角色定位
+
+你是一位世界级的演示文稿设计师和故事讲述者。你创作视觉震撼且高度精致的幻灯片，能够有效传达复杂信息。你精通设计，并擅长讲故事。
+
+你制作的幻灯片会根据源材料和目标受众进行调整。始终有一个故事主线，而你会找到最佳方式来讲述它。你融合了顶尖设计师的专业知识和创造力。
+
+## 设计原则
+
+这套幻灯片主要设计用于**阅读和分享**。结构应该是不言自明的，无需演讲者即可轻松理解。叙事和所有有用的数据都应包含在幻灯片的文本和视觉元素中。幻灯片应包含足够的上下文，使任何视觉元素都能独立被理解。如果有助于叙事，可以添加包含更密集信息（从源材料中提取）的特定幻灯片。
+
+## 工作流程
+
+你现在正在为下面描述的幻灯片编写一个**大纲**。
+**重要：这套幻灯片严禁超过 20 页。如果内容过多，请务必进行精简或合并。**
+
+我们将把这个大纲提供给专业设计师来制作最终成品。
+
+幻灯片内容应使用  英文。占位符应保留为 英文。
+
+---
+
+## 第一步：生成风格指南
+
+**首先**，在编写幻灯片大纲之前，你必须根据内容主题和用户要求生成一个全局的**风格指南**块。这应该包装在代码块内的XML标签中。
+
+### 风格指南示例
+
+` + "```xml" + `
+<STYLE_INSTRUCTIONS>
+设计美学：一种简洁、精致、极简的手绘水彩编辑风格，灵感来自建筑蓝图和高端技术期刊。整体感觉是精确、清晰和知识优雅。
+
+背景颜色：带有肌理的柔和米白色，十六进制代码 #F8F7F5，让人联想到高质量的绘图纸。
+
+主要字体：思源黑体，Neue Haas Grotesk Display Pro。用于所有幻灯片标题和主要标题。应使用粗体以产生冲击力和清晰度。
+
+次要字体：思源宋体，Tiempos Text。用于所有正文、副标题和注释。其高可读性和经典感觉与简洁的无衬线标题形成专业对比。
+
+色彩方案：
+- 主要文本颜色：深石板灰，#2F3542
+- 主要强调色（用于高亮、图表和关键元素）：生动、智能的蓝色，#007AFF
+
+视觉元素：
+始终使用细致、精确的线条、示意图和简洁的矢量图形。视觉效果是概念性和抽象的，旨在阐明想法而非描绘实际场景。布局宽敞且结构化，优先考虑信息层次和可读性。没有幻灯片编号、页脚、徽标或页眉。
+</STYLE_INSTRUCTIONS>
+` + "```" + `
+
+### 风格指南模板结构
+
+使用以下结构作为模板，但**动态调整**美学、字体和颜色以适应具体叙事：
+
+` + "```markdown" + `
+你是"建筑师"，一个复杂的AI，旨在将指令可视化为高端蓝图风格的数据展示。你的输出精确、分析性强且美学精致。
+
+**核心指令：**
+
+1. 分析用户提示的结构、意图和关键元素。
+2. 将指令转化为简洁、结构化的视觉隐喻（蓝图、展示、示意图）。
+3. 使用特定、克制的色彩方案和字体系列，以实现最大清晰度和专业影响力。
+4. 为所有视觉输出保持严格的 16:9 纵横比。
+5. 以三联画或网格布局呈现信息，平衡文本和视觉效果。
+
+**风格指南：**
+
+设计美学：[描述整体风格，例如：极简、俏皮、企业、建筑等]
+
+背景颜色：[描述和十六进制代码]
+
+主要字体：[标题字体名称]
+
+次要字体：[正文字体名称]
+
+色彩方案：
+- 主要文本颜色：[十六进制代码]
+- 主要强调色：[十六进制代码]
+
+视觉元素：[描述线条、形状、图像风格的使用，摄影 vs 矢量等]
+
+**要绘制的内容：**
+` + "```" + `
+
+---
+
+## 第二步：定义内容焦点
+
+对于这套特定的幻灯片，我们希望内容聚焦于：
+
+{prompt}
+
+我们还在下面附加了一些**制作说明**，这将有助于指导整套幻灯片的整体结构和叙事。
+
+制作说明 (来源材料)：
+{sources}
+
+---
+
+## 大纲编写规则
+
+记住以下规则：
+
+### 基本要求
+- 专注于幻灯片的大纲以及每张幻灯片应涵盖的内容
+- 每张幻灯片的描述应该全面且严格结构化
+- **第1张幻灯片必须是封面幻灯片，最后一张幻灯片必须是封底幻灯片**
+  - 这两张幻灯片的视觉风格和布局应与内部内容幻灯片明显不同（例如，使用"海报风格"布局、英雄式排版或全出血图像），以营造氛围并提供有力的结尾
+
+### 每张幻灯片的结构
+
+对于**每张幻灯片**，你必须使用以下 **4个部分** 准确输出内容：
+
+#### // 叙事目标
+解释这张幻灯片在整个叙事弧中的具体讲故事目的
+
+#### // 关键内容
+列出大标题、副标题和正文/要点。**每个具体数据点都必须可追溯到源材料。**
+
+#### // 视觉元素
+描述支持观点所需的图像、图表、图形或抽象视觉效果。
+
+#### // 布局
+描述构图、层次结构、空间排列或焦点。
+
+### 内容要求
+- 保留源材料中的关键元素
+- **每个具体数据点都必须直接可追溯到源材料**
+- 所有细节都需要提及，因为设计师稍后将无法访问源内容
+- 始终假设受众比你想象的更有专业知识、兴趣和智慧
+
+---
+
+## 关键要点（必须遵守）
+
+### ❌ 禁止事项
+
+- **永远不要生成超过 20 张幻灯片**
+- 避免使用"标题：副标题"格式的标题；它们看起来非常AI生成
+- 明确避免陈词滥调的"AI套话"模式
+  - 永远不要使用"这不仅仅是 [X]，更是 [Y]"之类的短语
+- 永远不要包含任何带有作者姓名、日期等占位符的幻灯片
+- 永远不要要求包含知名人物的照片级真实图像
+- **永远不要以通用的"有问题吗？"或"谢谢"幻灯片结束**
+  - 相反，封底应该是一个设计好的结束语、一个有意义的参考或一个强有力的视觉要点，以锚定整个叙事
+
+### ✅ 必须做到
+
+- 使用直接、自信、主动的**人性化语言**
+- 倾向于使用叙事性的主题句来帮助将整套幻灯片联系在一起
+- 确保所有数据点都有源材料支撑
+- 为设计师提供足够详细的描述
+
+---
+
+## 总结
+
+这份指令的目的是指导AI创建**高质量、专业、具有强烈叙事性**的演示文稿大纲。最终产品应该：
+
+1. 有清晰的视觉风格指南
+2. 讲述一个连贯的故事
+3. 包含足够的细节供设计师执行
+4. 避免常见的AI生成内容陷阱
+5. 以有意义的方式开始和结束
+`
+
 	case "custom":
 		return `你是一个有用的助手。根据以下来源和自定义请求，生成请求的内容。
 **注意：无论来源是什么语言，请务必使用中文进行回复。不要使用 ` + "```markdown" + ` 标记包裹输出。**
@@ -415,6 +588,78 @@ func (a *Agent) Chat(ctx context.Context, notebookID, message string, history []
 			"docs_retrieved": len(docs),
 		},
 	}, nil
+}
+
+// Slide represents a parsed PPT slide
+type Slide struct {
+	Style   string
+	Content string
+}
+
+// ParsePPTSlides parses the LLM output into individual slides
+func (a *Agent) ParsePPTSlides(content string) []Slide {
+	var slides []Slide
+
+	// 1. Extract style instructions
+	style := ""
+	styleStart := strings.Index(content, "<STYLE_INSTRUCTIONS>")
+	styleEnd := strings.Index(content, "</STYLE_INSTRUCTIONS>")
+	if styleStart != -1 && styleEnd > styleStart {
+		style = content[styleStart+20 : styleEnd]
+	}
+
+	// 2. Split by Slide markers.
+	// We look for "Slide X" or "幻灯片 X" with optional Markdown headers
+	re := regexp.MustCompile(`(?m)^(?:\s*#{1,6}\s*)?(?:Slide|幻灯片|第\d+张幻灯片|##)\s*\d+[:\s]*.*$`)
+	indices := re.FindAllStringIndex(content, -1)
+
+	if len(indices) > 0 {
+		for i := 0; i < len(indices); i++ {
+			start := indices[i][0]
+			end := len(content)
+			if i+1 < len(indices) {
+				end = indices[i+1][0]
+			}
+
+			slideContent := content[start:end]
+			// Validation: Must contain at least one of the section markers
+			lower := strings.ToLower(slideContent)
+			if strings.Contains(lower, "叙事目标") ||
+				strings.Contains(lower, "narrative goal") ||
+				strings.Contains(lower, "关键内容") {
+				slides = append(slides, Slide{
+					Style:   style,
+					Content: slideContent,
+				})
+			}
+		}
+	}
+
+	// 3. If still nothing, try splitting by the required // NARRATIVE GOAL / // 叙事目标
+	if len(slides) == 0 {
+		// Use a more specific marker for splitting if Slide headers are missing
+		marker := "// 叙事目标"
+		if !strings.Contains(content, marker) {
+			marker = "// NARRATIVE GOAL"
+		}
+
+		if strings.Contains(content, marker) {
+			parts := strings.Split(content, marker)
+			for i := 1; i < len(parts); i++ {
+				slides = append(slides, Slide{
+					Style:   style,
+					Content: marker + parts[i],
+				})
+			}
+		}
+	}
+
+	// Final fallback for completely unstructured content
+	if len(slides) == 0 {
+		slides = append(slides, Slide{Style: style, Content: content})
+	}
+
+	return slides
 }
 
 // GeneratePodcastScript generates a podcast script from sources

@@ -4,10 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
+	"runtime"
+	"time"
 
+	"github.com/kataras/golog"
+	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"github.com/smallnest/notex/backend"
 )
 
@@ -28,10 +31,32 @@ func main() {
 		os.Exit(0)
 	}
 
+	defer func() {
+		if err := recover(); err != nil {
+			golog.Error("recover:", err)
+			buf := make([]byte, 8192)
+			n := runtime.Stack(buf, true)
+			golog.Error("stack:", string(buf[:n]))
+		}
+	}()
+
+	golog.SetTimeFormat("2006/01/02 15:04:05.000")
+	sonarLog := "./logs/notex.log.%Y%m%d"
+	w, err := rotatelogs.New(
+		sonarLog,
+		rotatelogs.WithLinkName("./logs/notex.log"),
+		rotatelogs.WithMaxAge(time.Duration(7)*24*time.Hour),
+		rotatelogs.WithRotationTime(24*time.Hour))
+	if err != nil {
+		golog.Fatal(err)
+	}
+	defer w.Close()
+	golog.SetOutput(w)
+
 	// Load and validate configuration
 	cfg := backend.LoadConfig()
 	if err := backend.ValidateConfig(cfg); err != nil {
-		log.Fatalf("Configuration error: %v\n\n"+
+		golog.Fatalf("Configuration error: %v\n\n"+
 			"Required environment variables:\n"+
 			"  - OPENAI_API_KEY (for OpenAI) or\n"+
 			"  - OLLAMA_BASE_URL (for local Ollama)\n\n"+
@@ -39,7 +64,7 @@ func main() {
 			"  - VECTOR_STORE_TYPE (default: sqlite)\n"+
 			"  - STORE_PATH (default: ./data/checkpoints.db)\n"+
 			"  - SERVER_PORT (default: 8080)\n"+
-			"Error: %v", err)
+			"Error: %v", err, err)
 	}
 
 	ctx := context.Background()
@@ -64,48 +89,32 @@ func main() {
 func runServerMode(cfg backend.Config) {
 	server, err := backend.NewServer(cfg)
 	if err != nil {
-		log.Fatalf("Failed to create server: %v", err)
+		golog.Fatalf("Failed to create server: %v", err)
 	}
 
-	fmt.Printf("\n")
-	fmt.Println("╔═══════════════════════════════════════════════════════════╗")
-	fmt.Println("║                 📓 Notex - LangGraphGo Edition            ║")
-	fmt.Println("╚═══════════════════════════════════════════════════════════╝")
-	fmt.Printf("\n")
-	fmt.Printf("Version:     %s\n", Version)
-	fmt.Printf("Server:      http://%s:%s\n", cfg.ServerHost, cfg.ServerPort)
-	fmt.Printf("LLM:         %s\n", cfg.OpenAIModel)
-	fmt.Printf("Vector Store: %s\n", cfg.VectorStoreType)
-	fmt.Printf("\n")
-	fmt.Println("Features:")
-	fmt.Println("  📚 Multiple source types (PDF, TXT, MD, DOCX, HTML)")
-	fmt.Println("  🤖 AI-powered chat with your documents")
-	fmt.Println("  ✨ Multiple transformations (summary, FAQ, study guide, outline)")
-	fmt.Println("  🎙️  Podcast generation")
-	fmt.Println("  💾 Full privacy - local storage")
-	fmt.Println("  🔄 Multi-model support (OpenAI, Ollama)")
-	fmt.Println("\nPress Ctrl+C to stop")
-	fmt.Println("═══════════════════════════════════════════════════════════")
-	fmt.Println()
+	golog.Infof("Version:     %s", Version)
+	golog.Infof("Server:      http://%s:%s", cfg.ServerHost, cfg.ServerPort)
+	golog.Infof("LLM:         %s", cfg.OpenAIModel)
+	golog.Infof("Vector Store: %s", cfg.VectorStoreType)
 
 	if err := server.Start(); err != nil {
-		log.Fatalf("Server error: %v", err)
+		golog.Fatalf("Server error: %v", err)
 	}
 }
 
 func runIngestMode(ctx context.Context, cfg backend.Config, filePath, notebookName string) {
-	fmt.Printf("📂 Ingesting file: %s...\n", filePath)
+	golog.Infof("📂 Ingesting file: %s...", filePath)
 
 	// Initialize vector store
 	vectorStore, err := backend.NewVectorStore(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize vector store: %v", err)
+		golog.Fatalf("Failed to initialize vector store: %v", err)
 	}
 
 	// Initialize store
 	store, err := backend.NewStore(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize store: %v", err)
+		golog.Fatalf("Failed to initialize store: %v", err)
 	}
 
 	// Create or get notebook
@@ -121,16 +130,16 @@ func runIngestMode(ctx context.Context, cfg backend.Config, filePath, notebookNa
 	if notebookID == "" {
 		nb, err := store.CreateNotebook(ctx, notebookName, "Created by ingest mode", nil)
 		if err != nil {
-			log.Fatalf("Failed to create notebook: %v", err)
+			golog.Fatalf("Failed to create notebook: %v", err)
 		}
 		notebookID = nb.ID
-		fmt.Printf("📓 Created notebook: %s\n", notebookName)
+		golog.Infof("📓 Created notebook: %s", notebookName)
 	}
 
 	// Extract content
 	content, err := vectorStore.ExtractDocument(ctx, filePath)
 	if err != nil {
-		log.Fatalf("Extraction failed: %v", err)
+		golog.Fatalf("Extraction failed: %v", err)
 	}
 
 	// Create source in database
@@ -146,16 +155,16 @@ func runIngestMode(ctx context.Context, cfg backend.Config, filePath, notebookNa
 	}
 
 	if err := store.CreateSource(ctx, source); err != nil {
-		log.Fatalf("Failed to create source: %v", err)
+		golog.Fatalf("Failed to create source: %v", err)
 	}
 
 	// Ingest document
 	if err := vectorStore.IngestText(ctx, source.Name, content); err != nil {
-		log.Fatalf("Ingestion failed: %v", err)
+		golog.Fatalf("Ingestion failed: %v", err)
 	}
 
-	fmt.Println("✅ Ingestion complete!")
-	fmt.Printf("📓 Notebook: %s (ID: %s)\n", notebookName, notebookID)
+	golog.Infof("✅ Ingestion complete!")
+	golog.Infof("📓 Notebook: %s (ID: %s)", notebookName, notebookID)
 }
 
 func printUsage() {

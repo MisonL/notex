@@ -265,6 +265,34 @@ mindmap
 ` + "```" + `
 `
 
+	case "infograph":
+		return `# Role
+你是一位世界顶级的数据可视化设计师和信息图专家。你的任务是将复杂的文本信息转化为直观、吸引人且准确的视觉设计方案。
+
+# Task
+阅读所附文本，设计一张信息图（Infographic）。不要进行总结，而是描述这张图应该长什么样。你的输出将被直接用作 DALL-E 3 的绘画提示词。
+**注意：无论来源是什么语言，请务必使用中文进行回复。确保信息图中的所有文本内容（如标题、标签、数据点）都使用中文。不要使用 ` + "```markdown" + ` 标记包裹输出。**
+
+# Design Guidelines
+1.  **核心信息提炼**：找出文本中最重要的 3-5 个数据点、流程步骤或对比项。
+2.  **视觉隐喻**：使用形象的比喻。例如，讲网络安全用“盾牌和锁”，讲增长用“火箭或上升的箭头”。
+3.  **布局结构**：明确定义图的结构（例如：“从左到右的流程图”、“分成两半的对比图”、“中心辐射图”）。
+4.  **文本限制**：信息图中的文字必须极简。只保留标题、关键数据和极短的标签。
+5.  **风格**：插画或手绘感，使用柔和的插画或轻松的手绘笔触，以增强亲和力和友好度。
+
+# Output Format (DALL-E 3 Prompt style)
+Start with "Infographic illustration created in a soft, hand-drawn digital art style with friendly and approachable vibes."
+[描述整体布局和背景风格]
+[详细描述主要视觉元素 1，包含其图标、颜色、位置和附带的文字标签]
+[详细描述主要视觉元素 2，...]
+[详细描述连接元素（如箭头、线条）]
+[描述整体标题和配色方案]
+End with "The background is a clean, light gradient suitable for a professional presentation."
+
+# Input Text
+{sources}
+`
+
 	case "custom":
 		return `你是一个有用的助手。根据以下来源和自定义请求，生成请求的内容。
 **注意：无论来源是什么语言，请务必使用中文进行回复。不要使用 ` + "```markdown" + ` 标记包裹输出。**

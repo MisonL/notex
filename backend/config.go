@@ -19,6 +19,7 @@ type Config struct {
 	OpenAIBaseURL     string
 	OpenAIModel       string
 	EmbeddingModel    string
+	GoogleAPIKey      string
 	OllamaBaseURL     string
 	OllamaModel       string
 
@@ -73,6 +74,7 @@ func LoadConfig() Config {
 		OpenAIBaseURL:    getEnv("OPENAI_BASE_URL", ""),
 		OpenAIModel:      getEnv("OPENAI_MODEL", "gpt-4o-mini"),
 		EmbeddingModel:   getEnv("EMBEDDING_MODEL", "text-embedding-3-small"),
+		GoogleAPIKey:     getEnv("GOOGLE_API_KEY", ""),
 		OllamaBaseURL:    getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
 		OllamaModel:      getEnv("OLLAMA_MODEL", "llama3.2"),
 		VectorStoreType:  getEnv("VECTOR_STORE_TYPE", "sqlite"),

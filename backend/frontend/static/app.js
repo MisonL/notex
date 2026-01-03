@@ -758,6 +758,17 @@ class OpenNotebook {
 
     async viewNote(note) {
         const renderedContent = marked.parse(note.content);
+        const infographicHTML = note.metadata?.image_url 
+            ? `<div class="infographic-container">
+                 <img src="${note.metadata.image_url}" alt="Infographic" class="infographic-image">
+                 <div class="infographic-actions">
+                    <a href="${note.metadata.image_url}" target="_blank" class="btn-text">查看大图</a>
+                 </div>
+               </div>`
+            : '';
+
+        // Determine if we should show the text content
+        const showMarkdownContent = note.type !== 'infograph' || !note.metadata?.image_url;
 
         // Show the Note tab button
         const tabBtnNote = document.getElementById('tabBtnNote');
@@ -789,7 +800,8 @@ class OpenNotebook {
                     </div>
                 </div>
                 <div class="note-view-content">
-                    <div class="markdown-content">${renderedContent}</div>
+                    ${infographicHTML}
+                    <div class="markdown-content" style="${showMarkdownContent ? '' : 'display:none'}">${renderedContent}</div>
                 </div>
             </div>
         `;
@@ -959,7 +971,7 @@ class OpenNotebook {
         const nameMap = {
             summary: '摘要', faq: '常见问题', study_guide: '学习指南', outline: '大纲',
             podcast: '播客', timeline: '时间线', glossary: '术语表', quiz: '测验',
-            mindmap: '思维导图'
+            mindmap: '思维导图', infograph: '信息图'
         };
         const typeName = nameMap[type] || '内容';
 

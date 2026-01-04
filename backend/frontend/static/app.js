@@ -648,7 +648,7 @@ class OpenNotebook {
                     body: formData,
                 });
             } catch (error) {
-                this.showError(`上传失败: ${file.name}`);
+                this.showError(`上传失败: ${file.name} - ${error.message}`);
             }
         }
 

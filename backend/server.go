@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -370,10 +369,12 @@ func (s *Server) handleUpload(c *gin.Context) {
 	content, err := s.vectorStore.ExtractDocument(ctx, tempPath)
 	if err != nil {
 		golog.Errorf("failed to extract document content: %v", err)
-		source.Content = fmt.Sprintf("Failed to extract: %v", err)
-	} else {
-		source.Content = content
+		// Clean up uploaded file on error
+		os.Remove(tempPath)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to extract document content: %v", err)})
+		return
 	}
+	source.Content = content
 
 	if err := s.store.CreateSource(ctx, source); err != nil {
 		golog.Errorf("failed to create source: %v", err)
@@ -388,7 +389,7 @@ func (s *Server) handleUpload(c *gin.Context) {
 	stats, _ := s.vectorStore.GetStats(ctx)
 	totalDocsBefore := stats.TotalDocuments
 
-	if source.Content != "" && !strings.HasPrefix(source.Content, "Failed to extract") {
+	if source.Content != "" {
 		if err := s.vectorStore.IngestText(ctx, source.Name, source.Content); err != nil {
 			golog.Errorf("failed to ingest document: %v", err)
 		} else {

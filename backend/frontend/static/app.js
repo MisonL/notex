@@ -8,6 +8,22 @@ class OpenNotebook {
             allowDelete: true
         };
 
+        // Note type name mapping
+        this.noteTypeNameMap = {
+            summary: '摘要',
+            faq: '常见问题',
+            study_guide: '学习指南',
+            outline: '大纲',
+            podcast: '播客',
+            timeline: '时间线',
+            glossary: '术语表',
+            quiz: '测验',
+            mindmap: '思维导图',
+            infograph: '信息图',
+            ppt: '幻灯片',
+            insight: '洞察报告'
+        };
+
         this.init();
     }
 
@@ -774,7 +790,7 @@ class OpenNotebook {
                 const item = clone.querySelector('.note-item');
 
                 item.dataset.id = note.id;
-                item.querySelector('.note-type-badge').textContent = note.type;
+                item.querySelector('.note-type-badge').textContent = this.noteTypeNameMap[note.type] || note.type.toUpperCase();
                 item.querySelector('.note-title').textContent = note.title;
 
                 const plainText = note.content
@@ -1078,12 +1094,7 @@ class OpenNotebook {
         }
 
         const customPrompt = document.getElementById('customPrompt').value;
-        const nameMap = {
-            summary: '摘要', faq: '常见问题', study_guide: '学习指南', outline: '大纲',
-            podcast: '播客', timeline: '时间线', glossary: '术语表', quiz: '测验',
-            mindmap: '思维导图', infograph: '信息图', ppt: '幻灯片'
-        };
-        const typeName = nameMap[type] || '内容';
+        const typeName = this.noteTypeNameMap[type] || '内容';
 
         // 1. 开始动画
         if (element) {

@@ -1214,6 +1214,7 @@ body {
 
 .transform-card[data-type="infograph"] { background-color: #fef2f2 !important; color: #991b1b !important; }
 .transform-card[data-type="ppt"] { background-color: #fff7ed !important; color: #9a3412 !important; }
+.transform-card[data-type="insight"] { background-color: #f3e8ff !important; color: #6b21a8 !important; }
 
 /* 定义角度变量，用于平滑动画 */
 @property --gradient-angle {

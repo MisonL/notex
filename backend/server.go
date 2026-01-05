@@ -310,12 +310,14 @@ func (s *Server) handleAddSource(c *gin.Context) {
 		golog.Infof("URL content fetched successfully, size: %d bytes", len(content))
 	}
 
+	golog.Infof("create source: %v", source.Type)
 	if err := s.store.CreateSource(ctx, source); err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create source"})
 		return
 	}
 
 	// Ingest into vector store (synchronous for immediate availability)
+	golog.Infof("ingesting text: %d bytes", len(source.Content))
 	if source.Content != "" {
 		if err := s.vectorStore.IngestText(ctx, source.Name, source.Content); err != nil {
 			golog.Errorf("failed to ingest text: %v", err)

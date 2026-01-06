@@ -1,5 +1,7 @@
 # Notex
 
+中文 | [English](./README.md)
+
 <div align="center">
 
 **注重隐私的开源 NotebookLM 替代方案**
@@ -13,6 +15,10 @@ AI 驱动知识管理应用程序，让您从文档中创建智能笔记本。
 
 ![](docs/note2.png)
 </div>
+
+
+
+- Python 版: [pynotex](https://github.com/Beeta/pynotex)
 
 ## ✨ 特性
 

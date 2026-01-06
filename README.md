@@ -1,5 +1,7 @@
 # Notex
 
+[中文](./README_CN.md) | English
+
 <div align="center">
 
 **A privacy-first, open-source alternative to NotebookLM**
@@ -14,6 +16,7 @@ An AI-powered knowledge management application that lets you create intelligent 
 ![](docs/note2.png)
 </div>
 
+- Python clone: [pynotex](https://github.com/Beeta/pynotex)
 
 ## ✨ Features
 

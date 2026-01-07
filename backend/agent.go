@@ -25,9 +25,10 @@ type Agent struct {
 
 // NewAgent creates a new agent
 func NewAgent(cfg Config, vectorStore *VectorStore) (*Agent, error) {
-	llm, err := createLLM(cfg)
+	// Root LLM used for primary transformations (defaults to OpenAI/OpenAI Compatible)
+	llm, err := createDynamicLLM("openai", cfg.OpenAIModel, cfg.OpenAIBaseURL, cfg.OpenAIAPIKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create LLM: %w", err)
+		return nil, fmt.Errorf("failed to create default LLM: %w", err)
 	}
 
 	provider := NewGeminiClient(cfg.GoogleAPIKey, llm)
@@ -40,21 +41,22 @@ func NewAgent(cfg Config, vectorStore *VectorStore) (*Agent, error) {
 	}, nil
 }
 
-// createLLM creates an LLM based on configuration
-func createLLM(cfg Config) (llms.Model, error) {
-	if cfg.IsOllama() {
+// createLLM creates an LLM based on specific parameters (Dynamic)
+func createDynamicLLM(provider, model, baseURL, apiKey string) (llms.Model, error) {
+	if provider == "ollama" || (baseURL != "" && strings.Contains(baseURL, "11434")) {
 		return ollamallm.New(
-			ollamallm.WithModel(cfg.OllamaModel),
-			ollamallm.WithServerURL(cfg.OllamaBaseURL),
+			ollamallm.WithModel(model),
+			ollamallm.WithServerURL(baseURL),
 		)
 	}
 
 	opts := []openai.Option{
-		openai.WithToken(cfg.OpenAIAPIKey),
-		openai.WithModel(cfg.OpenAIModel),
+		openai.WithToken(apiKey),
+		openai.WithModel(model),
 	}
-	if cfg.OpenAIBaseURL != "" {
-		opts = append(opts, openai.WithBaseURL(cfg.OpenAIBaseURL))
+	if baseURL != "" {
+		golog.Infof("Using custom OpenAI Base URL: %s", baseURL)
+		opts = append(opts, openai.WithBaseURL(baseURL))
 	}
 
 	return openai.New(opts...)
@@ -210,11 +212,25 @@ func (a *Agent) Chat(ctx context.Context, notebookID, message string, history []
 		return nil, fmt.Errorf("failed to format prompt: %w", err)
 	}
 
-	// Generate response
-	ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
-	defer cancel()
+	// Determine which LLM to use for chat
+	var chatLLM llms.Model
+	var chatErr error
 
-	response, err := a.provider.GenerateFromSinglePrompt(ctx, a.llm, promptValue)
+	if a.cfg.ChatProvider == "openai" {
+		chatLLM, chatErr = createDynamicLLM("openai", a.cfg.ChatModel, a.cfg.OpenAIBaseURL, a.cfg.OpenAIAPIKey)
+	} else if a.cfg.ChatProvider == "ollama" {
+		chatLLM, chatErr = createDynamicLLM("ollama", a.cfg.ChatModel, a.cfg.OllamaBaseURL, "")
+	} else {
+		// Default to a.llm (which is the default configured at startup)
+		chatLLM = a.llm
+	}
+
+	if chatErr != nil {
+		golog.Errorf("Failed to create dynamic LLM for chat: %v, falling back to default", chatErr)
+		chatLLM = a.llm
+	}
+
+	response, err := a.provider.GenerateFromSinglePrompt(ctx, chatLLM, promptValue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate response: %w", err)
 	}

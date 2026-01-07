@@ -8,12 +8,16 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kataras/golog"
+	"github.com/tmc/langchaingo/embeddings"
+	"github.com/tmc/langchaingo/llms/googleai"
+	"github.com/tmc/langchaingo/llms/ollama"
 )
 
 //go:embed frontend/index.html frontend/static
@@ -33,8 +37,47 @@ type Server struct {
 
 // NewServer creates a new server
 func NewServer(cfg Config) (*Server, error) {
+	// Initialize Embedder based on provider
+	var vsOpts []VectorStoreOption
+	var embedder embeddings.Embedder
+	var errEmbed error
+
+	if cfg.EmbeddingModel != "" {
+		ctx := context.Background()
+		switch strings.ToLower(cfg.EmbeddingProvider) {
+		case "google":
+			if cfg.GoogleAPIKey != "" {
+				golog.Infof("Initializing Gemini Embedder with model: %s", cfg.EmbeddingModel)
+				llm, err := googleai.New(ctx, googleai.WithAPIKey(cfg.GoogleAPIKey), googleai.WithDefaultModel(cfg.EmbeddingModel))
+				if err != nil {
+					golog.Errorf("Failed to create GoogleAI client for embeddings: %v", err)
+				} else {
+					embedder, errEmbed = embeddings.NewEmbedder(llm)
+				}
+			} else {
+				golog.Warnf("Embedding provider is 'google' but GOOGLE_API_KEY is unset")
+			}
+		case "ollama":
+			golog.Infof("Initializing Ollama Embedder with model: %s (BaseURL: %s)", cfg.EmbeddingModel, cfg.OllamaBaseURL)
+			llm, err := ollama.New(ollama.WithModel(cfg.EmbeddingModel), ollama.WithServerURL(cfg.OllamaBaseURL))
+			if err != nil {
+				golog.Errorf("Failed to create Ollama client for embeddings: %v", err)
+			} else {
+				embedder, errEmbed = embeddings.NewEmbedder(llm)
+			}
+		default:
+			golog.Warnf("Unknown embedding provider: %s", cfg.EmbeddingProvider)
+		}
+
+		if errEmbed != nil {
+			golog.Errorf("Failed to create embedder: %v", errEmbed)
+		} else if embedder != nil {
+			vsOpts = append(vsOpts, WithEmbedder(embedder))
+		}
+	}
+
 	// Initialize vector store
-	vectorStore, err := NewVectorStore(cfg)
+	vectorStore, err := NewVectorStore(cfg, vsOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vector store: %w", err)
 	}
@@ -101,6 +144,7 @@ func (s *Server) setupRoutes() {
 		// Health check
 		api.GET("/health", s.handleHealth)
 		api.GET("/config", s.handleConfig)
+		api.POST("/config", s.handleUpdateConfig)
 
 		// Notebook routes
 		notebooks := api.Group("/notebooks")
@@ -194,7 +238,104 @@ func (s *Server) handleHealth(c *gin.Context) {
 
 func (s *Server) handleConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, ConfigResponse{
-		AllowDelete: s.cfg.AllowDelete,
+		AllowDelete:       s.cfg.AllowDelete,
+		EmbeddingProvider: s.cfg.EmbeddingProvider,
+		ImageModel:        s.cfg.ImageModel,
+		ChatProvider:      s.cfg.ChatProvider,
+		ChatModel:         s.cfg.ChatModel,
+	})
+}
+
+func (s *Server) handleUpdateConfig(c *gin.Context) {
+	var req struct {
+		EmbeddingProvider string `json:"embedding_provider"`
+		ImageModel        string `json:"image_model"`
+		ChatProvider      string `json:"chat_provider"`
+		ChatModel         string `json:"chat_model"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+
+
+	if req.ImageModel != "" {
+		s.cfg.ImageModel = req.ImageModel
+		golog.Infof("Image model updated to: %s", s.cfg.ImageModel)
+	}
+
+	if req.ChatProvider != "" {
+		s.cfg.ChatProvider = req.ChatProvider
+		golog.Infof("Chat provider updated to: %s", s.cfg.ChatProvider)
+	}
+
+	if req.ChatModel != "" {
+		s.cfg.ChatModel = req.ChatModel
+		golog.Infof("Chat model updated to: %s", s.cfg.ChatModel)
+	}
+
+	if req.EmbeddingProvider != "" {
+		s.cfg.EmbeddingProvider = req.EmbeddingProvider
+		
+		// Re-initialize embedder and vector store
+		var vsOpts []VectorStoreOption
+		var embedder embeddings.Embedder
+		var errEmbed error
+		
+		ctx := context.Background()
+		switch strings.ToLower(s.cfg.EmbeddingProvider) {
+		case "google":
+			if s.cfg.GoogleAPIKey != "" {
+				golog.Infof("Switching to Gemini Embedder with model: %s", s.cfg.EmbeddingModel)
+				llm, err := googleai.New(ctx, googleai.WithAPIKey(s.cfg.GoogleAPIKey), googleai.WithDefaultModel(s.cfg.EmbeddingModel))
+				if err != nil {
+					golog.Errorf("Failed to create GoogleAI client for embeddings: %v", err)
+				} else {
+					embedder, errEmbed = embeddings.NewEmbedder(llm)
+				}
+			} else {
+				golog.Warnf("Embedding provider is 'google' but GOOGLE_API_KEY is unset")
+			}
+		case "ollama":
+			golog.Infof("Switching to Ollama Embedder with model: %s (BaseURL: %s)", s.cfg.EmbeddingModel, s.cfg.OllamaBaseURL)
+			llm, err := ollama.New(ollama.WithModel(s.cfg.EmbeddingModel), ollama.WithServerURL(s.cfg.OllamaBaseURL))
+			if err != nil {
+				golog.Errorf("Failed to create Ollama client for embeddings: %v", err)
+			} else {
+				embedder, errEmbed = embeddings.NewEmbedder(llm)
+			}
+		default:
+			golog.Warnf("Unknown embedding provider: %s", s.cfg.EmbeddingProvider)
+		}
+
+		if errEmbed != nil {
+			golog.Errorf("Failed to create embedder: %v", errEmbed)
+		} else if embedder != nil {
+			vsOpts = append(vsOpts, WithEmbedder(embedder))
+		}
+
+		vectorStore, err := NewVectorStore(s.cfg, vsOpts...)
+		if err != nil {
+			golog.Errorf("Failed to recreate vector store: %v", err)
+			// Don't fail the request, just log error, maybe old store is still usable or it is broken now
+		} else {
+			s.vectorMutex.Lock()
+			s.vectorStore = vectorStore
+			// Clear loaded notebooks check so they re-index/load if needed (though current implementation loads all at startup? no, on demand)
+			s.loadedNotebooks = make(map[string]bool)
+			s.vectorMutex.Unlock()
+			golog.Infof("Vector store re-initialized with provider: %s", s.cfg.EmbeddingProvider)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":             "ok",
+		"embedding_provider": s.cfg.EmbeddingProvider,
+		"image_model":        s.cfg.ImageModel,
+		"chat_provider":      s.cfg.ChatProvider,
+		"chat_model":         s.cfg.ChatModel,
 	})
 }
 
@@ -603,7 +744,7 @@ func (s *Server) handleTransform(c *gin.Context) {
 	if req.Type == "infograph" {
 		extra := "**注意：无论来源是什么语言，请务必使用中文**"
 		prompt := response.Content + "\n\n" + extra
-		imagePath, err := s.agent.provider.GenerateImage(ctx, "gemini-3-pro-image-preview", prompt)
+		imagePath, err := s.agent.provider.GenerateImage(ctx, s.cfg.ImageModel, prompt)
 		if err != nil {
 			golog.Errorf("failed to generate infographic image: %v", err)
 			metadata["image_error"] = err.Error()
@@ -629,7 +770,7 @@ func (s *Server) handleTransform(c *gin.Context) {
 				// Combine style and slide content for the image generator
 				prompt := fmt.Sprintf("Style: %s\n\nSlide Content: %s", slides[0].Style, slide.Content)
 				prompt += "\n\n**注意：无论来源是什么语言，请务必使用中文**\n"
-				imagePath, err := s.agent.provider.GenerateImage(ctx, "gemini-3-pro-image-preview", prompt)
+				imagePath, err := s.agent.provider.GenerateImage(ctx, s.cfg.ImageModel, prompt)
 				if err != nil {
 					golog.Errorf("failed to generate slide %d: %v", i+1, err)
 					continue

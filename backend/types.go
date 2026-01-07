@@ -152,5 +152,9 @@ type HealthResponse struct {
 
 // ConfigResponse represents the client configuration
 type ConfigResponse struct {
-	AllowDelete bool `json:"allow_delete"`
+	AllowDelete       bool   `json:"allow_delete"`
+	EmbeddingProvider string `json:"embedding_provider"`
+	ImageModel        string `json:"image_model"`
+	ChatProvider      string `json:"chat_provider"`
+	ChatModel         string `json:"chat_model"`
 }

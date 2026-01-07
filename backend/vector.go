@@ -10,14 +10,25 @@ import (
 	"sync"
 
 	"github.com/kataras/golog"
+	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/schema"
+	"math"
 )
 
 // VectorStore wraps different vector store implementations
 type VectorStore struct {
-	cfg  Config
-	docs []schema.Document
-	mu   sync.RWMutex
+	cfg      Config
+	docs     []schema.Document
+	mu       sync.RWMutex
+	embedder embeddings.Embedder
+}
+
+type VectorStoreOption func(*VectorStore)
+
+func WithEmbedder(e embeddings.Embedder) VectorStoreOption {
+	return func(vs *VectorStore) {
+		vs.embedder = e
+	}
 }
 
 // VectorStats contains statistics about the vector store
@@ -28,16 +39,22 @@ type VectorStats struct {
 }
 
 // NewVectorStore creates a new vector store based on configuration
-func NewVectorStore(cfg Config) (*VectorStore, error) {
+func NewVectorStore(cfg Config, opts ...VectorStoreOption) (*VectorStore, error) {
 	// Ensure data directory exists
 	if err := os.MkdirAll(filepath.Dir(cfg.SQLitePath), 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
-	return &VectorStore{
+	vs := &VectorStore{
 		cfg:  cfg,
 		docs: make([]schema.Document, 0),
-	}, nil
+	}
+
+	for _, opt := range opts {
+		opt(vs)
+	}
+
+	return vs, nil
 }
 
 // IngestDocuments loads and indexes documents from file paths
@@ -84,6 +101,10 @@ func (vs *VectorStore) IngestText(ctx context.Context, sourceName, content strin
 	defer vs.mu.Unlock()
 
 	// Create documents
+	// Create documents
+	docsToAdd := make([]schema.Document, 0, len(chunks))
+	var textsToEmbed []string
+
 	for i, chunk := range chunks {
 		doc := schema.Document{
 			PageContent: chunk,
@@ -92,8 +113,27 @@ func (vs *VectorStore) IngestText(ctx context.Context, sourceName, content strin
 				"chunk":  i,
 			},
 		}
-		vs.docs = append(vs.docs, doc)
+		docsToAdd = append(docsToAdd, doc)
+		textsToEmbed = append(textsToEmbed, chunk)
 	}
+
+	// Generate embeddings if embedder is configured
+	if vs.embedder != nil {
+		golog.Infof("[VectorStore] Generatng embeddings for %d chunks...", len(textsToEmbed))
+		// Note: implementing batching logic might be needed for large documents
+		vectors, err := vs.embedder.EmbedDocuments(ctx, textsToEmbed)
+		if err != nil {
+			golog.Errorf("[VectorStore] Failed to generate embeddings: %v", err)
+			// Continue without embeddings, fallback to keyword search
+		} else {
+			for i, vector := range vectors {
+				docsToAdd[i].Metadata["embedding"] = vector
+			}
+			golog.Infof("[VectorStore] Successfully generated %d vectors", len(vectors))
+		}
+	}
+
+	vs.docs = append(vs.docs, docsToAdd...)
 
 	golog.Infof("[VectorStore] Ingested %d chunks from source '%s' (total docs: %d)\n", len(chunks), sourceName, len(vs.docs))
 	return len(chunks), nil
@@ -231,6 +271,52 @@ func (vs *VectorStore) SimilaritySearch(ctx context.Context, query string, numDo
 
 		if score > 0 {
 			scores = append(scores, docScore{doc: doc, score: score})
+		}
+	}
+
+	// If embedder is available, perform vector similarity search and boost scores
+	if vs.embedder != nil {
+		queryVector, err := vs.embedder.EmbedQuery(ctx, query)
+		if err != nil {
+			golog.Errorf("[VectorStore] Failed to embed query: %v", err)
+		} else {
+			fmt.Println("[VectorStore] Calculating vector similarities...")
+			
+			// Re-initialize scores to combine both
+			newScores := make([]docScore, 0, len(vs.docs))
+			
+			for _, doc := range vs.docs {
+				// Get keyword score
+				kwScore := 0.0
+				for _, s := range scores {
+					// Compare pointers or content? Content might be duplicate.
+					// Let's use simple content comparison for now or assume unique
+					if s.doc.PageContent == doc.PageContent { 
+						kwScore = s.score
+						break
+					}
+				}
+
+				vecScore := 0.0
+				if emb, ok := doc.Metadata["embedding"].([]float32); ok {
+					sim := cosineSimilarity(queryVector, emb)
+					if sim > 0 {
+						vecScore = float64(sim)
+					}
+				}
+
+				// Hybrid Fusion Formula
+				// Keyword matches are typically integers (2.0, 5.0, 10.0)
+				// Vector cosine is 0.0-1.0.
+				// We want vector to have significant impact.
+				// Let's scale vector score by 10.
+				finalScore := kwScore + (vecScore * 10.0)
+				
+				if finalScore > 0 {
+					newScores = append(newScores, docScore{doc: doc, score: finalScore})
+				}
+			}
+			scores = newScores
 		}
 	}
 
@@ -381,4 +467,20 @@ func (vs *VectorStore) convertWithMarkitdown(filePath string) (string, error) {
 
 	fmt.Printf("[VectorStore] markitdown conversion successful, output size: %d bytes\n", len(content))
 	return string(content), nil
+}
+
+func cosineSimilarity(a, b []float32) float32 {
+	if len(a) != len(b) || len(a) == 0 {
+		return 0
+	}
+	var dot, magA, magB float32
+	for i := 0; i < len(a); i++ {
+		dot += a[i] * b[i]
+		magA += a[i] * a[i]
+		magB += b[i] * b[i]
+	}
+	if magA == 0 || magB == 0 {
+		return 0
+	}
+	return dot / (float32(math.Sqrt(float64(magA))) * float32(math.Sqrt(float64(magB))))
 }

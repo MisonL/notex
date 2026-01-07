@@ -335,8 +335,9 @@ func (vs *VectorStore) SimilaritySearch(ctx context.Context, query string, numDo
 	// This allows the LLM to use the full context
 	if len(scores) == 0 {
 		fmt.Println("[VectorStore] No matches found, returning all documents as fallback")
-		result := make([]schema.Document, 0, min(numDocs, len(vs.docs)))
-		for i := 0; i < len(result); i++ {
+		limit := min(numDocs, len(vs.docs))
+		result := make([]schema.Document, 0, limit)
+		for i := 0; i < limit; i++ {
 			result = append(result, vs.docs[i])
 		}
 		return result, nil

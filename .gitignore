@@ -26,6 +26,7 @@ go.work.sum
 
 # env file
 .env
+.env.local
 
 # Editor/IDE
 # .idea/
@@ -34,12 +35,13 @@ go.work.sum
 uploads/
 data/
 logs/
+logs_debug/
 tmp
+.go/
+*.log
 
 open-notebook
 !open-notebook/
-
-server.log
 
 notex
 !notex/

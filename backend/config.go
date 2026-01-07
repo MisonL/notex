@@ -123,15 +123,15 @@ func LoadConfig() Config {
 	return cfg
 }
 
-// ValidateConfig validates the configuration
-func ValidateConfig(cfg Config) error {
-	// Check if at least one LLM provider is configured
-	hasOpenAI := cfg.OpenAIAPIKey != ""
-	hasOllama := cfg.OpenAIBaseURL != "" && contains(cfg.OpenAIBaseURL, "11434")
+	// ValidateConfig validates the configuration
+	func ValidateConfig(cfg Config) error {
+		// Check if at least one LLM provider is configured
+		hasOpenAI := cfg.OpenAIAPIKey != ""
+		hasOllama := cfg.OllamaBaseURL != ""
 
-	if !hasOpenAI && !hasOllama {
-		return fmt.Errorf("either OPENAI_API_KEY or OLLAMA_BASE_URL must be set")
-	}
+		if !hasOpenAI && !hasOllama {
+			return fmt.Errorf("either OPENAI_API_KEY or OLLAMA_BASE_URL must be set")
+		}
 
 	// Validate vector store configuration
 	switch cfg.VectorStoreType {

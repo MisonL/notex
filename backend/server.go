@@ -318,19 +318,20 @@ func (s *Server) handleUpdateConfig(c *gin.Context) {
 			vsOpts = append(vsOpts, WithEmbedder(embedder))
 		}
 
-		vectorStore, err := NewVectorStore(s.cfg, vsOpts...)
-		if err != nil {
-			golog.Errorf("Failed to recreate vector store: %v", err)
-			// Don't fail the request, just log error, maybe old store is still usable or it is broken now
-		} else {
-			s.vectorMutex.Lock()
-			s.vectorStore = vectorStore
-			// Clear loaded notebooks check so they re-index/load if needed (though current implementation loads all at startup? no, on demand)
-			s.loadedNotebooks = make(map[string]bool)
-			s.vectorMutex.Unlock()
-			golog.Infof("Vector store re-initialized with provider: %s", s.cfg.EmbeddingProvider)
+			vectorStore, err := NewVectorStore(s.cfg, vsOpts...)
+			if err != nil {
+				golog.Errorf("Failed to recreate vector store: %v", err)
+				// Don't fail the request, just log error, maybe old store is still usable or it is broken now
+			} else {
+				s.vectorMutex.Lock()
+				s.vectorStore = vectorStore
+				// Clear loaded notebooks check so they re-index/load if needed (though current implementation loads all at startup? no, on demand)
+				s.loadedNotebooks = make(map[string]bool)
+				s.vectorMutex.Unlock()
+				s.agent.SetVectorStore(vectorStore)
+				golog.Infof("Vector store re-initialized with provider: %s", s.cfg.EmbeddingProvider)
+			}
 		}
-	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":             "ok",

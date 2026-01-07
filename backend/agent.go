@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kataras/golog"
@@ -21,6 +22,7 @@ type Agent struct {
 	llm         llms.Model
 	cfg         Config
 	provider    LLMProvider
+	vsMu        sync.RWMutex
 }
 
 // NewAgent creates a new agent
@@ -43,6 +45,7 @@ func NewAgent(cfg Config, vectorStore *VectorStore) (*Agent, error) {
 
 // createLLM creates an LLM based on specific parameters (Dynamic)
 func createDynamicLLM(provider, model, baseURL, apiKey string) (llms.Model, error) {
+	model = normalizeModelName(model)
 	if provider == "ollama" || (baseURL != "" && strings.Contains(baseURL, "11434")) {
 		return ollamallm.New(
 			ollamallm.WithModel(model),
@@ -60,6 +63,33 @@ func createDynamicLLM(provider, model, baseURL, apiKey string) (llms.Model, erro
 	}
 
 	return openai.New(opts...)
+}
+
+func normalizeModelName(model string) string {
+	if !strings.Contains(model, ",") {
+		return strings.TrimSpace(model)
+	}
+	parts := strings.Split(model, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			return part
+		}
+	}
+	return strings.TrimSpace(model)
+}
+
+func (a *Agent) SetVectorStore(vs *VectorStore) {
+	a.vsMu.Lock()
+	a.vectorStore = vs
+	a.vsMu.Unlock()
+}
+
+func (a *Agent) getVectorStore() *VectorStore {
+	a.vsMu.RLock()
+	vs := a.vectorStore
+	a.vsMu.RUnlock()
+	return vs
 }
 
 // GenerateTransformation generates a note based on transformation type
@@ -166,7 +196,8 @@ func (a *Agent) GenerateTransformation(ctx context.Context, req *TransformationR
 // Chat performs a chat query with RAG
 func (a *Agent) Chat(ctx context.Context, notebookID, message string, history []ChatMessage) (*ChatResponse, error) {
 	// Perform similarity search to find relevant sources
-	docs, err := a.vectorStore.SimilaritySearch(ctx, message, a.cfg.MaxSources)
+	vs := a.getVectorStore()
+	docs, err := vs.SimilaritySearch(ctx, message, a.cfg.MaxSources)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search documents: %w", err)
 	}

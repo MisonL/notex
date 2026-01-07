@@ -12,6 +12,7 @@ import (
 	"github.com/kataras/golog"
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"github.com/smallnest/notex/backend"
+	"io"
 )
 
 var Version = "1.0.0"
@@ -51,7 +52,7 @@ func main() {
 		golog.Fatal(err)
 	}
 	defer w.Close()
-	golog.SetOutput(w)
+	golog.SetOutput(io.MultiWriter(os.Stdout, w))
 
 	// Load and validate configuration
 	cfg := backend.LoadConfig()

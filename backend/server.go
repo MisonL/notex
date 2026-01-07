@@ -145,7 +145,6 @@ func (s *Server) setupRoutes() {
 		// Health check
 		api.GET("/health", s.handleHealth)
 		api.GET("/config", s.handleConfig)
-		api.GET("/config", s.handleConfig)
 		api.POST("/config", s.handleUpdateConfig)
 		api.GET("/models", s.handleListModels)
 
@@ -414,24 +413,58 @@ func (s *Server) handleListModels(c *gin.Context) {
 	finalList := []ModelItem{}
 	seen := make(map[string]bool)
 
-	// Add current model first if it matches provider
-	if isCurrentProvider && currentModel != "" {
+	// Define default models for each provider
+	defaultModels := []string{}
+	if provider == "openai" {
+		defaultModels = []string{"qwen3-max", "gpt-4o", "gpt-4o-mini", "o1-preview"}
+	} else if provider == "ollama" {
+		defaultModels = []string{"llama3.2", "qwen2.5-coder:7b", "mistral"}
+	}
+
+	// 1. Add env configured models with (Env Config) label
+	envModelStr := ""
+	if provider == "openai" {
+		envModelStr = s.cfg.OpenAIModel
+	} else if provider == "ollama" {
+		envModelStr = s.cfg.OllamaModel
+	}
+
+	if envModelStr != "" {
+		// Support comma-separated list
+		parts := strings.Split(envModelStr, ",")
+		for _, m := range parts {
+			m = strings.TrimSpace(m)
+			if m != "" && !seen[m] {
+				finalList = append(finalList, ModelItem{
+					ID:          m,
+					DisplayName: fmt.Sprintf("%s (Env Config)", m),
+				})
+				seen[m] = true
+			}
+		}
+	}
+
+	// 2. Add current selected model if it's not the env model (don't add label)
+	if isCurrentProvider && currentModel != "" && !seen[currentModel] {
 		finalList = append(finalList, ModelItem{
 			ID:          currentModel,
-			DisplayName: fmt.Sprintf("%s (Current)", currentModel),
+			DisplayName: currentModel,
 		})
 		seen[currentModel] = true
 	}
 
-	// Add env configured OpenAI model if provider is openai
-	if provider == "openai" && s.cfg.OpenAIModel != "" && !seen[s.cfg.OpenAIModel] {
-		finalList = append(finalList, ModelItem{
-			ID:          s.cfg.OpenAIModel,
-			DisplayName: fmt.Sprintf("%s (Env Config)", s.cfg.OpenAIModel),
-		})
-		seen[s.cfg.OpenAIModel] = true
+	// 3. Add default preset models
+	for _, m := range defaultModels {
+		if !seen[m] {
+			finalList = append(finalList, ModelItem{
+				ID:          m,
+				DisplayName: m,
+			})
+			seen[m] = true
+		}
 	}
 
+	// 4. Add dynamic models from provider API
 	for _, m := range models {
 		if !seen[m] {
 			finalList = append(finalList, ModelItem{

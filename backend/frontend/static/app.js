@@ -426,23 +426,21 @@ class OpenNotebook {
         select.innerHTML = '';
         let foundCurrent = false;
 
-        models.forEach(modelStr => {
+        models.forEach(modelItem => {
             const opt = document.createElement('option');
-            // Parse logic: "ID (Description)"
-            // Backend sends "ID" or "ID (Suffix)"
-            let value = modelStr;
-            // Clean suffix for value
-            if (modelStr.includes(' (')) {
-                value = modelStr.split(' (')[0];
+            // Check if modelItem is string (legacy) or object (new)
+            const id = typeof modelItem === 'string' ? modelItem : modelItem.id;
+            const name = typeof modelItem === 'string' ? modelItem : modelItem.display_name;
+            
+            opt.value = id;
+            opt.textContent = name;
+            if (id === currentVal) {
+                opt.selected = true;
+                foundCurrent = true;
             }
-            // Use full string for text
-            const text = modelStr;
-
-            opt.value = value;
-            opt.textContent = text;
             select.appendChild(opt);
 
-            if (value === currentVal) foundCurrent = true;
+            if (id === currentVal) foundCurrent = true;
         });
 
         // If configured model is in list, select it
@@ -452,10 +450,14 @@ class OpenNotebook {
              // Fallback: if configured model ID isn't in the list (maybe offline?), add it anyway?
              // Or just let it default to first.
              // Better to add it if missing so user knows what's configured.
-             if (!models.some(m => m.startsWith(this.config.chatModel))) {
+             const exists = models.some(m => {
+                  const id = typeof m === 'string' ? m : m.id;
+                  return id === this.config.chatModel;
+             });
+             if (!exists) {
                   const opt = document.createElement('option');
                   opt.value = this.config.chatModel;
-                  opt.textContent = `${this.config.chatModel} (Current)`;
+                  opt.textContent = this.config.chatModel;
                   select.insertBefore(opt, select.firstChild);
                   select.value = this.config.chatModel;
              }

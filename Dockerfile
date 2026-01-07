@@ -18,7 +18,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o notex main.go
 
 # Runtime stage
-FROM alpine:3.22
+FROM alpine:latest
 
 WORKDIR /app
 

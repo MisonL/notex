@@ -21,8 +21,6 @@ type Config struct {
 	EmbeddingProvider string
 	EmbeddingModel    string
 	ImageModel        string
-	ChatProvider      string
-	ChatModel         string
 	GoogleAPIKey      string
 	OllamaBaseURL     string
 	OllamaModel       string
@@ -30,7 +28,6 @@ type Config struct {
     // Chat settings (Configured for defaults)
     ChatProvider      string
     ChatModel         string
-    ImageModel        string
 
 	// Vector store settings
 	VectorStoreType    string // "memory", "supabase", "pgvector", "redis", "sqlite"
@@ -89,15 +86,9 @@ func LoadConfig() Config {
 		EmbeddingProvider: getEnv("EMBEDDING_PROVIDER", "google"),
 		EmbeddingModel:    getEnv("EMBEDDING_MODEL", "text-embedding-3-small"),
 		ImageModel:        getEnv("IMAGE_MODEL", "gemini-2.5-flash-image-preview"),
-		ChatProvider:     getEnv("CHAT_PROVIDER", "openai"),
-		ChatModel:        getEnv("CHAT_MODEL", "gpt-4o-mini"),
-		GoogleAPIKey:      getEnv("GOOGLE_API_KEY", ""),
-		OllamaBaseURL:    getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
-		OllamaModel:      getEnv("OLLAMA_MODEL", "llama3.2"),
-
         ChatProvider:     getEnv("CHAT_PROVIDER", "openai"),
         ChatModel:        getEnv("CHAT_MODEL", "qwen3-max"),
-        ImageModel:       getEnv("IMAGE_MODEL", "gemini-2.5-flash-image-preview"),
+
 		VectorStoreType:  getEnv("VECTOR_STORE_TYPE", "sqlite"),
 		SupabaseURL:      getEnv("SUPABASE_URL", ""),
 		SupabaseKey:      getEnv("SUPABASE_KEY", ""),

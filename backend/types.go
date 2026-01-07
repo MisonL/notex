@@ -160,7 +160,13 @@ type ConfigResponse struct {
 	ChatModel         string `json:"chat_model"`
 }
 
+// ModelItem represents a single model option
+type ModelItem struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+}
+
 // ModelListResponse represents a list of models
 type ModelListResponse struct {
-	Models []string `json:"models"`
+	Models []ModelItem `json:"models"`
 }

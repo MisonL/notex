@@ -145,7 +145,9 @@ func (s *Server) setupRoutes() {
 		// Health check
 		api.GET("/health", s.handleHealth)
 		api.GET("/config", s.handleConfig)
+		api.GET("/config", s.handleConfig)
 		api.POST("/config", s.handleUpdateConfig)
+		api.GET("/models", s.handleListModels)
 
 		// Notebook routes
 		notebooks := api.Group("/notebooks")
@@ -341,6 +343,107 @@ func (s *Server) handleUpdateConfig(c *gin.Context) {
 }
 
 // Notebook handlers
+
+
+func (s *Server) handleListModels(c *gin.Context) {
+	provider := c.Query("provider")
+	if provider == "" {
+		provider = "openai"
+	}
+
+	type ModelInfo struct {
+		ID string `json:"id"`
+	}
+
+	var models []string
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	if provider == "openai" {
+		url := fmt.Sprintf("%s/v1/models", strings.TrimSuffix(s.cfg.GetBaseURL(), "/"))
+		// If BaseURL is empty, use default OpenAI
+		if s.cfg.OpenAIBaseURL == "" {
+			url = "https://api.openai.com/v1/models"
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err == nil {
+			if s.cfg.OpenAIAPIKey != "" {
+				req.Header.Set("Authorization", "Bearer "+s.cfg.OpenAIAPIKey)
+			}
+			resp, err := client.Do(req)
+			if err == nil {
+				defer resp.Body.Close()
+				var result struct {
+					Data []ModelInfo `json:"data"`
+				}
+				if json.NewDecoder(resp.Body).Decode(&result) == nil {
+					for _, m := range result.Data {
+						models = append(models, m.ID)
+					}
+				}
+			}
+		}
+	} else if provider == "ollama" {
+		url := fmt.Sprintf("%s/api/tags", strings.TrimSuffix(s.cfg.OllamaBaseURL, "/"))
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err == nil {
+			resp, err := client.Do(req)
+			if err == nil {
+				defer resp.Body.Close()
+				var result struct {
+					Models []struct {
+						Name string `json:"name"`
+					} `json:"models"`
+				}
+				if json.NewDecoder(resp.Body).Decode(&result) == nil {
+					for _, m := range result.Models {
+						models = append(models, m.Name)
+					}
+				}
+			}
+		}
+	}
+
+	// Prioritize and deduplicate
+	currentModel := s.cfg.ChatModel
+	isCurrentProvider := s.cfg.ChatProvider == provider
+
+	finalList := []ModelItem{}
+	seen := make(map[string]bool)
+
+	// Add current model first if it matches provider
+	if isCurrentProvider && currentModel != "" {
+		finalList = append(finalList, ModelItem{
+			ID:          currentModel,
+			DisplayName: fmt.Sprintf("%s (Current)", currentModel),
+		})
+		seen[currentModel] = true
+	}
+
+	// Add env configured OpenAI model if provider is openai
+	if provider == "openai" && s.cfg.OpenAIModel != "" && !seen[s.cfg.OpenAIModel] {
+		finalList = append(finalList, ModelItem{
+			ID:          s.cfg.OpenAIModel,
+			DisplayName: fmt.Sprintf("%s (Env Config)", s.cfg.OpenAIModel),
+		})
+		seen[s.cfg.OpenAIModel] = true
+	}
+
+	for _, m := range models {
+		if !seen[m] {
+			finalList = append(finalList, ModelItem{
+				ID:          m,
+				DisplayName: m,
+			})
+			seen[m] = true
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"models": finalList})
+}
 
 func (s *Server) handleListNotebooks(c *gin.Context) {
 	ctx := context.Background()

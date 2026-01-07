@@ -389,7 +389,7 @@ class OpenNotebook {
     }
   }
 
-  updateChatModelVisibility() {
+  async updateChatModelVisibility() {
     const provider = document.getElementById('chatProviderSelect').value;
     const openaiSelect = document.getElementById('chatModelOpenAI');
     const ollamaSelect = document.getElementById('chatModelOllama');
@@ -400,6 +400,72 @@ class OpenNotebook {
     } else {
       openaiSelect.classList.add('hidden');
       ollamaSelect.classList.remove('hidden');
+    }
+    
+    // Refresh models for the selected provider
+    await this.loadModels(provider);
+  }
+
+  async loadModels(provider) {
+    const selectId = provider === 'openai' ? 'chatModelOpenAI' : 'chatModelOllama';
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    // Preserve current selection if possible, or use config
+    const currentVal = select.value || (this.config.chatProvider === provider ? this.config.chatModel : '');
+
+    // Show loading if empty
+    if (select.options.length === 0) {
+       select.innerHTML = '<option value="">Loading...</option>';
+    }
+
+    try {
+        const res = await this.api(`/models?provider=${provider}`);
+        const models = res.models || [];
+        
+        select.innerHTML = '';
+        let foundCurrent = false;
+
+        models.forEach(modelStr => {
+            const opt = document.createElement('option');
+            // Parse logic: "ID (Description)"
+            // Backend sends "ID" or "ID (Suffix)"
+            let value = modelStr;
+            // Clean suffix for value
+            if (modelStr.includes(' (')) {
+                value = modelStr.split(' (')[0];
+            }
+            // Use full string for text
+            const text = modelStr;
+
+            opt.value = value;
+            opt.textContent = text;
+            select.appendChild(opt);
+
+            if (value === currentVal) foundCurrent = true;
+        });
+
+        // If configured model is in list, select it
+        if (foundCurrent) {
+            select.value = currentVal;
+        } else if (this.config.chatProvider === provider && this.config.chatModel) {
+             // Fallback: if configured model ID isn't in the list (maybe offline?), add it anyway?
+             // Or just let it default to first.
+             // Better to add it if missing so user knows what's configured.
+             if (!models.some(m => m.startsWith(this.config.chatModel))) {
+                  const opt = document.createElement('option');
+                  opt.value = this.config.chatModel;
+                  opt.textContent = `${this.config.chatModel} (Current)`;
+                  select.insertBefore(opt, select.firstChild);
+                  select.value = this.config.chatModel;
+             }
+        }
+    } catch (e) {
+        console.error("Failed to load models:", e);
+        // On error, keep existing or show error option
+        if (select.options.length === 0 || select.options[0].text === 'Loading...') {
+             select.innerHTML = '<option value="">Failed to load models</option>';
+        }
     }
   }
 
@@ -733,7 +799,7 @@ class OpenNotebook {
     document.querySelector('#newNotebookForm input[name="name"]').focus();
   }
 
-  showSettingsModal() {
+  async showSettingsModal() {
     const modal = document.getElementById('settingsModal');
     const selectEmbedding = document.getElementById('embeddingProviderSelect');
     const selectImage = document.getElementById('imageModelSelect');
@@ -748,15 +814,8 @@ class OpenNotebook {
         document.getElementById('chatProviderSelect').value = this.config.chatProvider;
     }
     
-    // Set appropriate chat model based on provider
-    this.updateChatModelVisibility();
-    if (this.config.chatModel) {
-        if (this.config.chatProvider === 'openai') {
-            document.getElementById('chatModelOpenAI').value = this.config.chatModel;
-        } else {
-            document.getElementById('chatModelOllama').value = this.config.chatModel;
-        }
-    }
+    // Set appropriate chat model based on provider (and load models)
+    await this.updateChatModelVisibility();
     
     modal.classList.add('active');
     document.getElementById('modalOverlay').classList.add('active');

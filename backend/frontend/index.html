@@ -735,6 +735,29 @@
         </div>
         <form class="modal-body" id="settingsForm">
             <div class="form-group">
+                <label class="input-label">聊天渠道 (Chat Channel)</label>
+                <select class="input-field" name="chat_provider" id="chatProviderSelect">
+                    <option value="openai">OpenAI (或 兼容接口)</option>
+                    <option value="ollama">Ollama (本地)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="input-label">聊天模型 (Chat Model)</label>
+                <div id="chatModelContainer">
+                    <!-- OpenAI Models -->
+                    <select class="input-field chat-model-select" name="chat_model_openai" id="chatModelOpenAI">
+                        <!-- Dynamic -->
+                    </select>
+                    <!-- Ollama Models -->
+                    <select class="input-field chat-model-select hidden" name="chat_model_ollama" id="chatModelOllama">
+                        <!-- Dynamic -->
+                    </select>
+                </div>
+                <p class="input-hint" style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                    选择用于对话和生成的 AI 模型。
+                </p>
+            </div>
+            <div class="form-group">
                 <label class="input-label">Embedding 模型提供商</label>
                 <select class="input-field" name="embedding_provider" id="embeddingProviderSelect">
                     <option value="google">Google Gemini</option>
@@ -747,39 +770,11 @@
             <div class="form-group">
                 <label class="input-label">图片生成模型 (Image Generation)</label>
                 <select class="input-field" name="image_model" id="imageModelSelect">
-                    <option value="gemini-2.5-flash-image-preview">Gemini 2.5 Flash (Nano Banana) - 推荐/免费额度高</option>
-                    <option value="gemini-3-pro-image-preview">Gemini 3 Pro - 高质量/额度少</option>
+                    <option value="gemini-2.5-flash-image-preview">gemini-2.5-flash-image-preview</option>
+                    <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
                 </select>
                 <p class="input-hint" style="font-size: 0.85em; color: #666; margin-top: 4px;">
                     用于生成幻灯片图片和信息图。Flash 模型速度快且免费额度高。
-                </p>
-            </div>
-            <div class="form-group">
-                <label class="input-label">聊天渠道 (Chat Channel)</label>
-                <select class="input-field" name="chat_provider" id="chatProviderSelect">
-                    <option value="openai">OpenAI (或 兼容接口)</option>
-                    <option value="ollama">Ollama (本地)</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="input-label">聊天模型 (Chat Model)</label>
-                <div id="chatModelContainer">
-                    <!-- OpenAI Models -->
-                    <select class="input-field chat-model-select" name="chat_model_openai" id="chatModelOpenAI">
-                        <option value="qwen3-max">qwen3-max (默认)</option>
-                        <option value="gpt-4o">gpt-4o</option>
-                        <option value="gpt-4o-mini">gpt-4o-mini</option>
-                        <option value="o1-preview">o1-preview</option>
-                    </select>
-                    <!-- Ollama Models -->
-                    <select class="input-field chat-model-select hidden" name="chat_model_ollama" id="chatModelOllama">
-                        <option value="llama3.2">llama3.2 (默认)</option>
-                        <option value="qwen2.5:7b">qwen2.5:7b</option>
-                        <option value="deepseek-v3">deepseek-v3</option>
-                    </select>
-                </div>
-                <p class="input-hint" style="font-size: 0.85em; color: #666; margin-top: 4px;">
-                    选择用于对话和生成的 AI 模型。
                 </p>
             </div>
             <div class="modal-actions">

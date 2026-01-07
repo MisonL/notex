@@ -27,6 +27,11 @@ type Config struct {
 	OllamaBaseURL     string
 	OllamaModel       string
 
+    // Chat settings (Configured for defaults)
+    ChatProvider      string
+    ChatModel         string
+    ImageModel        string
+
 	// Vector store settings
 	VectorStoreType    string // "memory", "supabase", "pgvector", "redis", "sqlite"
 	SupabaseURL        string
@@ -89,6 +94,10 @@ func LoadConfig() Config {
 		GoogleAPIKey:      getEnv("GOOGLE_API_KEY", ""),
 		OllamaBaseURL:    getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
 		OllamaModel:      getEnv("OLLAMA_MODEL", "llama3.2"),
+
+        ChatProvider:     getEnv("CHAT_PROVIDER", "openai"),
+        ChatModel:        getEnv("CHAT_MODEL", "qwen3-max"),
+        ImageModel:       getEnv("IMAGE_MODEL", "gemini-2.5-flash-image-preview"),
 		VectorStoreType:  getEnv("VECTOR_STORE_TYPE", "sqlite"),
 		SupabaseURL:      getEnv("SUPABASE_URL", ""),
 		SupabaseKey:      getEnv("SUPABASE_KEY", ""),

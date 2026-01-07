@@ -86,8 +86,11 @@ func LoadConfig() Config {
 		EmbeddingProvider: getEnv("EMBEDDING_PROVIDER", "google"),
 		EmbeddingModel:    getEnv("EMBEDDING_MODEL", "text-embedding-3-small"),
 		ImageModel:        getEnv("IMAGE_MODEL", "gemini-2.5-flash-image-preview"),
-        ChatProvider:     getEnv("CHAT_PROVIDER", "openai"),
-        ChatModel:        getEnv("CHAT_MODEL", "qwen3-max"),
+		GoogleAPIKey:      getEnv("GOOGLE_API_KEY", ""),
+		OllamaBaseURL:     getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
+		OllamaModel:       getEnv("OLLAMA_MODEL", "llama3.2"),
+		ChatProvider:      getEnv("CHAT_PROVIDER", "openai"),
+		ChatModel:         getEnv("CHAT_MODEL", "qwen3-max"),
 
 		VectorStoreType:  getEnv("VECTOR_STORE_TYPE", "sqlite"),
 		SupabaseURL:      getEnv("SUPABASE_URL", ""),

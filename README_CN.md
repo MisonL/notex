@@ -48,38 +48,104 @@ cd notex
 # 安装依赖
 go mod tidy
 
-# 设置您的 API 密钥
-export OPENAI_API_KEY=your_key_here
-
 # 运行服务器
 go run . -server
 ```
 
 在浏览器中打开 `http://localhost:8080`
 
-### 使用 Ollama（本地、免费）
+## ⚙️ 配置
+
+Notex 使用环境变量进行配置。推荐的方式是创建 `.env` 文件来配置应用。
+
+### 步骤 1：创建配置文件
+
+复制示例配置文件来创建本地配置：
 
 ```bash
-# 确保 Ollama 正在运行
-ollama serve
+cp .env.example .env
+```
 
-# 使用 Ollama 运行
-export OLLAMA_BASE_URL=http://localhost:11434
+### 步骤 2：配置您的 LLM 提供商
+
+编辑 `.env` 文件，配置以下 LLM 提供商中的**一个**：
+
+#### 选项 A：使用 OpenAI（云端）
+
+OpenAI 提供高质量的模型，但需要 API 密钥并按使用量收费。
+
+1. 从 [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys) 获取 API 密钥
+2. 编辑 `.env` 并配置：
+
+```env
+# OpenAI 配置
+OPENAI_API_KEY=sk-your-actual-api-key-here
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+EMBEDDING_MODEL=text-embedding-3-small
+```
+
+**可用的 OpenAI 模型：**
+- `gpt-4o-mini` - 快速且经济实惠（推荐）
+- `gpt-4o` - 最强大
+- `gpt-3.5-turbo` - 旧版本选项
+
+**小贴士：**
+- 您也可以通过修改 `OPENAI_BASE_URL` 来使用 Azure OpenAI 或其他兼容 OpenAI 的 API
+- 例如，使用 DeepSeek：`OPENAI_BASE_URL=https://api.deepseek.com/v1` 和 `OPENAI_MODEL=deepseek-chat`
+
+#### 选项 B：使用 Ollama（本地、免费）
+
+Ollama 在您的本地机器上运行，完全免费，但需要一台性能较好的电脑。
+
+1. 从 [https://ollama.com](https://ollama.com) 安装 Ollama
+2. 拉取一个模型（例如：`ollama pull llama3.2`）
+3. 启动 Ollama：`ollama serve`
+4. 编辑 `.env` 并配置：
+
+```env
+# Ollama 配置
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+```
+
+**可用的 Ollama 模型：**
+- `llama3.2` - 速度和质量的推荐平衡
+- `qwen2.5` - 中文内容效果优秀
+- `mistral` - 英文性能良好
+- `codellama` - 代码专用
+
+**小贴士：**
+- Ollama 模型完全在您的机器上运行 - 数据不会离开您的电脑
+- 确保在启动 Notex 之前 Ollama 正在运行
+- 更大的模型需要更多的内存和 CPU
+
+### 步骤 3：可选的 Google Gemini（用于信息图）
+
+要使用 Google Gemini Nano Banana 生成信息图：
+
+```env
+GOOGLE_API_KEY=your-google-api-key-here
+```
+
+从 [https://makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey) 获取密钥
+
+### 步骤 4：运行应用
+
+配置好 `.env` 文件后，只需运行：
+
+```bash
 go run . -server
 ```
 
-### 或者：构建后运行
+应用将自动加载您的 `.env` 配置并在 `http://localhost:8080` 启动
+
+### 构建并运行（可选）
+
+如果您更喜欢构建二进制文件而不是使用 `go run`：
 
 ```bash
-# 构建二进制文件
 go build -o notex .
-
-# 使用 OpenAI 运行
-export OPENAI_API_KEY=your_key_here
-./notex -server
-
-# 或使用 Ollama 运行
-export OLLAMA_BASE_URL=http://localhost:11434
 ./notex -server
 ```
 
@@ -133,60 +199,35 @@ export OLLAMA_BASE_URL=http://localhost:11434
 
 或使用自定义提示字段进行任何其他转换。
 
-## ⚙️ 配置
+### 其他配置选项
 
-### 环境变量
+对于高级用户，`.env` 文件支持以下额外配置选项：
 
-| 变量                | 描述                   | 默认值                   |
-| ------------------- | ---------------------- | ------------------------ |
-| `OPENAI_API_KEY`    | OpenAI API 密钥        | 必需（除非使用 Ollama）  |
-| `OPENAI_BASE_URL`   | 自定义 API 基础 URL    | OpenAI 默认值            |
-| `OPENAI_MODEL`      | 模型名称               | `gpt-4o-mini`            |
-| `EMBEDDING_MODEL`   | 嵌入模型               | `text-embedding-3-small` |
-| `OLLAMA_BASE_URL`   | Ollama 服务器 URL      | `http://localhost:11434` |
-| `OLLAMA_MODEL`      | Ollama 模型名称        | `llama3.2`               |
-| `GOOGLE_API_KEY`    | Google Gemini API 密钥 | 信息图生成必需           |
-| `SERVER_HOST`       | 服务器主机             | `0.0.0.0`                |
-| `SERVER_PORT`       | 服务器端口             | `8080`                   |
-| `VECTOR_STORE_TYPE` | 向量存储后端           | `sqlite`                 |
-| `STORE_PATH`        | 数据库路径             | `./data/checkpoints.db`  |
-| `MAX_SOURCES`       | RAG 的最大来源数       | `5`                      |
-| `CHUNK_SIZE`        | 文档分块大小           | `1000`                   |
-| `CHUNK_OVERLAP`     | 分块重叠               | `200`                    |
+```env
+# 服务器配置
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8080
 
-### 向量存储选项
+# 向量存储（默认：sqlite）
+# 选项：sqlite、memory、supabase、postgres、redis
+VECTOR_STORE_TYPE=sqlite
 
-- `sqlite` - 本地 SQLite 数据库（默认）
-- `memory` - 内存向量
-- `supabase` - Supabase 向量存储
-- `postgres` / `pgvector` - 带 pgvector 的 PostgreSQL
-- `redis` - 带 RediSearch 的 Redis
+# RAG 处理
+MAX_SOURCES=5          # 检索的最大来源数
+CHUNK_SIZE=1000        # 文档分块大小
+CHUNK_OVERLAP=200      # 分块重叠
 
-### 配置文件示例
+# 文档转换
+ENABLE_MARKITDOWN=true  # 使用 Microsoft markitdown 更好地转换 PDF/DOCX
 
-**docker-compose.yml**（用于 PostgreSQL + pgvector）
+# 播客生成
+ENABLE_PODCAST=true
+PODCAST_VOICE=alloy    # 选项：alloy、echo、fable、onyx、nova、shimmer
 
-```yaml
-version: '3.8'
-services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_DB: notebook
-      POSTGRES_USER: notebook
-      POSTGRES_PASSWORD: secret
-    ports:
-      - "5432:5432"
-
-  app:
-    build: .
-    environment:
-      - POSTGRES_URL=postgres://notebook:secret@postgres:5432/notebook
-      - VECTOR_STORE_TYPE=postgres
-    ports:
-      - "8080:8080"
+# 功能开关
+ALLOW_DELETE=true
+ALLOW_MULTIPLE_NOTES_OF_SAME_TYPE=true
 ```
-
 
 ## 🔧 开发
 
@@ -235,34 +276,6 @@ make test
 
 # 代码检查
 make check
-```
-
-## 🐳 Docker 部署
-
-### 使用 Docker Compose
-
-```bash
-# 启动所有服务（PostgreSQL + Redis + 应用）
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f app
-
-# 停止服务
-docker-compose down
-```
-
-### 单独构建
-
-```bash
-# 构建镜像
-docker build -t open-notebook .
-
-# 运行容器
-docker run -p 8080:8080 \
-  -e OPENAI_API_KEY=your_key \
-  -v $(pwd)/data:/app/data \
-  open-notebook
 ```
 
 ## 🤝 贡献

@@ -1030,16 +1030,9 @@ class OpenNotebook {
         // 信息图错误提示 HTML
         let infographicErrorHTML = '';
         if (note.type === 'infograph' && note.metadata?.image_error) {
-            // 转义 HTML 特殊字符
-            const escapeHtml = (text) => {
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            };
-
             const fullPrompt = note.content + '\n\n**注意：无论来源是什么语言，请务必使用中文**';
-            const escapedPrompt = escapeHtml(fullPrompt);
-            const escapedError = escapeHtml(note.metadata.image_error);
+            const escapedPrompt = this.escapeHtml(fullPrompt);
+            const escapedError = this.escapeHtml(note.metadata.image_error);
 
             infographicErrorHTML = `
                 <div class="infographic-error-banner">
@@ -1595,14 +1588,26 @@ class OpenNotebook {
         document.getElementById('footerStatus').textContent = text;
     }
 
-    showError(message) {
-        this.setStatus(`错误: ${message}`);
+    // 工具方法：转义 HTML 特殊字符
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // 通用 toast 提示方法
+    showToast(message, type = 'error') {
+        const colors = {
+            error: 'var(--accent-red)',
+            warn: 'var(--accent-orange)',
+            success: 'var(--accent-green)'
+        };
 
         const toast = document.createElement('div');
-        toast.className = 'error-toast';
+        toast.className = `${type}-toast`;
         toast.style.cssText = `
             position: fixed; bottom: 60px; right: 20px; padding: 12px 20px;
-            background: var(--accent-red); color: white; font-family: var(--font-mono);
+            background: ${colors[type]}; color: white; font-family: var(--font-mono);
             font-size: 0.75rem; border-radius: 4px; box-shadow: var(--shadow-medium);
             animation: slideIn 0.3s ease; z-index: 3000; white-space: pre-wrap; max-width: 400px;
         `;
@@ -1615,22 +1620,13 @@ class OpenNotebook {
         }, 5000);
     }
 
-    showWarn(message) {
-        const toast = document.createElement('div');
-        toast.className = 'warn-toast';
-        toast.style.cssText = `
-            position: fixed; bottom: 60px; right: 20px; padding: 12px 20px;
-            background: var(--accent-orange); color: white; font-family: var(--font-mono);
-            font-size: 0.75rem; border-radius: 4px; box-shadow: var(--shadow-medium);
-            animation: slideIn 0.3s ease; z-index: 3000; white-space: pre-wrap; max-width: 400px;
-        `;
-        toast.textContent = message;
-        document.body.appendChild(toast);
+    showError(message) {
+        this.setStatus(`错误: ${message}`);
+        this.showToast(message, 'error');
+    }
 
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => toast.remove(), 300);
-        }, 5000);
+    showWarn(message) {
+        this.showToast(message, 'warn');
     }
 
     updateFooter() {

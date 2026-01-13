@@ -3,7 +3,9 @@
     "allow": [
       "Bash(go build:*)",
       "Bash(wc:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(cat:*)",
+      "Bash(gopls version:*)"
     ]
   }
 }

@@ -343,12 +343,18 @@ class OpenNotebook {
         const id = setTimeout(() => controller.abort(), timeout);
 
         const defaults = {
-            headers: {
-                'Content-Type': 'application/json',
-            },
             cache: 'no-store',
             signal: controller.signal
         };
+
+        // Set Content-Type header (but not for FormData - let browser set it)
+        if (!(options.body instanceof FormData)) {
+            defaults.headers = {
+                'Content-Type': 'application/json',
+            };
+        } else {
+            defaults.headers = {};
+        }
 
         if (this.token) {
             defaults.headers['Authorization'] = `Bearer ${this.token}`;
@@ -1108,6 +1114,11 @@ class OpenNotebook {
         const files = e.target.files;
         if (!files.length) return;
 
+        if (!this.currentNotebook) {
+            this.showError('请先选择一个笔记本');
+            return;
+        }
+
         this.showLoading('处理中...');
 
         for (const file of files) {
@@ -1118,7 +1129,6 @@ class OpenNotebook {
             try {
                 await this.api('/upload', {
                     method: 'POST',
-                    headers: {},
                     body: formData,
                 });
             } catch (error) {

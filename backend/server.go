@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -87,10 +88,9 @@ func (s *Server) setupRoutes() {
 	staticFS, _ := fs.Sub(frontendFS, "frontend/static")
 	s.http.StaticFS("/static", http.FS(staticFS))
 
-	// Serve uploaded files (with audit)
-	uploads := s.http.Group("/uploads")
-	uploads.Use(AuditMiddlewareLite())
-	uploads.Static("/", "./data/uploads")
+	// Serve uploaded files with auth protection
+	// Remove public uploads route - files are now served via authenticated API
+	// Old: uploads.Static("/", "./data/uploads")
 
 	// Serve index.html at root (with audit)
 	s.http.GET("/", AuditMiddlewareLite(), func(c *gin.Context) {
@@ -98,7 +98,7 @@ func (s *Server) setupRoutes() {
 		content, _ := frontendFS.ReadFile("frontend/index.html")
 		c.Data(http.StatusOK, "text/html; charset=utf-8", content)
 	})
-	
+
 	// Auth routes
 	auth := s.http.Group("/auth")
 	{
@@ -115,6 +115,9 @@ func (s *Server) setupRoutes() {
 		// Health check
 		api.GET("/health", s.handleHealth)
 		api.GET("/config", s.handleConfig)
+
+		// File serving with user isolation - must be authenticated
+		api.GET("/files/:filename", s.handleServeFile)
 
 		// Notebook routes
 		notebooks := api.Group("/notebooks")
@@ -465,14 +468,14 @@ func (s *Server) checkNotebookAccess(ctx context.Context, notebookID, userID str
 
 func (s *Server) handleUpload(c *gin.Context) {
 	ctx := context.Background()
-	notebookID := c.PostForm("notebook_id")
 	userID := c.GetString("user_id")
-	
+	notebookID := c.PostForm("notebook_id")
+
 	if notebookID == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "notebook_id required"})
 		return
 	}
-	
+
 	if err := s.checkNotebookAccess(ctx, notebookID, userID); err != nil {
 		c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
 		return
@@ -488,11 +491,14 @@ func (s *Server) handleUpload(c *gin.Context) {
 	ext := filepath.Ext(file.Filename)
 	baseName := file.Filename[:len(file.Filename)-len(ext)]
 	uniqueFileName := fmt.Sprintf("%s_%s%s", baseName, uuid.New().String()[:8], ext)
-	tempPath := fmt.Sprintf("./data/uploads/%s", uniqueFileName)
 
-	// Ensure uploads directory exists
-	if err := os.MkdirAll("./data/uploads", 0755); err != nil {
-		golog.Errorf("failed to create uploads directory: %v", err)
+	// Store in user-specific directory for isolation
+	userUploadDir := fmt.Sprintf("./data/uploads/%s", userID)
+	tempPath := fmt.Sprintf("%s/%s", userUploadDir, uniqueFileName)
+
+	// Ensure user uploads directory exists
+	if err := os.MkdirAll(userUploadDir, 0755); err != nil {
+		golog.Errorf("failed to create user uploads directory: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create uploads directory"})
 		return
 	}
@@ -511,7 +517,7 @@ func (s *Server) handleUpload(c *gin.Context) {
 		Type:       "file",
 		FileName:   uniqueFileName, // Store unique filename
 		FileSize:   file.Size,
-		Metadata:   map[string]interface{}{"path": tempPath},
+		Metadata:   map[string]interface{}{"path": tempPath, "user_id": userID},
 	}
 
 	// Extract content
@@ -621,6 +627,7 @@ func (s *Server) handleDeleteNote(c *gin.Context) {
 func (s *Server) handleTransform(c *gin.Context) {
 	ctx := context.Background()
 	notebookID := c.Param("id")
+	userID := c.GetString("user_id")
 
 	// 按需加载向量索引
 	if err := s.loadNotebookVectorIndex(ctx, notebookID); err != nil {
@@ -697,13 +704,13 @@ func (s *Server) handleTransform(c *gin.Context) {
 	if req.Type == "infograph" {
 		extra := "**注意：无论来源是什么语言，请务必使用中文**"
 		prompt := response.Content + "\n\n" + extra
-		imagePath, err := s.agent.provider.GenerateImage(ctx, "gemini-3-pro-image-preview", prompt)
+		imagePath, err := s.agent.provider.GenerateImage(ctx, "gemini-3-pro-image-preview", prompt, userID)
 		if err != nil {
 			golog.Errorf("failed to generate infographic image: %v", err)
 			metadata["image_error"] = err.Error()
 		} else {
-			// Convert local path to web path
-			webPath := "/uploads/" + filepath.Base(imagePath)
+			// Convert local path to web path (authenticated API)
+			webPath := "/api/files/" + filepath.Base(imagePath)
 			metadata["image_url"] = webPath
 		}
 	}
@@ -723,12 +730,12 @@ func (s *Server) handleTransform(c *gin.Context) {
 				// Combine style and slide content for the image generator
 				prompt := fmt.Sprintf("Style: %s\n\nSlide Content: %s", slides[0].Style, slide.Content)
 				prompt += "\n\n**注意：无论来源是什么语言，请务必使用中文**\n"
-				imagePath, err := s.agent.provider.GenerateImage(ctx, "gemini-3-pro-image-preview", prompt)
+				imagePath, err := s.agent.provider.GenerateImage(ctx, "gemini-3-pro-image-preview", prompt, userID)
 				if err != nil {
 					golog.Errorf("failed to generate slide %d: %v", i+1, err)
 					continue
 				}
-				slideURLs = append(slideURLs, "/uploads/"+filepath.Base(imagePath))
+				slideURLs = append(slideURLs, "/api/files/"+filepath.Base(imagePath))
 			}
 			metadata["slides"] = slideURLs
 		}
@@ -955,6 +962,63 @@ func (s *Server) handleChat(c *gin.Context) {
 }
 
 // Utility functions
+
+// handleServeFile serves uploaded files with user isolation
+func (s *Server) handleServeFile(c *gin.Context) {
+	userID := c.GetString("user_id")
+	filename := c.Param("filename")
+
+	if filename == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "filename required"})
+		return
+	}
+
+	// Security: only allow access to user's own directory
+	filePath := filepath.Join("./data/uploads", userID, filename)
+
+	// Check if file exists and is within user's directory
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "File not found"})
+		return
+	}
+
+	// Verify the path is within the user's uploads directory
+	userUploadDir := filepath.Join("./data/uploads", userID)
+	absUserDir, _ := filepath.Abs(userUploadDir)
+	if !strings.HasPrefix(absPath, absUserDir) {
+		golog.Warnf("Attempted directory traversal by user %s: %s", userID, filename)
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Access denied"})
+		return
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "File not found"})
+		return
+	}
+
+	// Determine content type
+	ext := filepath.Ext(filename)
+	contentType := "application/octet-stream"
+	switch ext {
+	case ".jpg", ".jpeg":
+		contentType = "image/jpeg"
+	case ".png":
+		contentType = "image/png"
+	case ".gif":
+		contentType = "image/gif"
+	case ".webp":
+		contentType = "image/webp"
+	case ".svg":
+		contentType = "image/svg+xml"
+	case ".pdf":
+		contentType = "application/pdf"
+	}
+
+	c.Header("Content-Type", contentType)
+	c.File(absPath)
+}
 
 func writeFile(path, content string) error {
 	dir := filepath.Dir(path)

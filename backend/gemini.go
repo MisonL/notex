@@ -17,7 +17,7 @@ import (
 // LLMProvider defines the interface for LLM operations
 type LLMProvider interface {
 	// GenerateImage generates an image using the provider
-	GenerateImage(ctx context.Context, model, prompt string) (string, error)
+	GenerateImage(ctx context.Context, model, prompt string, userID string) (string, error)
 
 	// GenerateTextWithModel generates text using a specific model
 	GenerateTextWithModel(ctx context.Context, prompt string, model string) (string, error)
@@ -41,7 +41,7 @@ func NewGeminiClient(googleAPIKey string, llm llms.Model) *GeminiClient {
 }
 
 // GenerateImage generates an image using the Google GenAI SDK
-func (n *GeminiClient) GenerateImage(ctx context.Context, model, prompt string) (string, error) {
+func (n *GeminiClient) GenerateImage(ctx context.Context, model, prompt string, userID string) (string, error) {
 	if n.googleAPIKey == "" {
 		golog.Errorf("google_api_key is not set")
 		return "", fmt.Errorf("google_api_key is not set")
@@ -108,9 +108,15 @@ func (n *GeminiClient) GenerateImage(ctx context.Context, model, prompt string) 
 		cancel()
 		golog.Infof("image data received successfully, saving...")
 
-		// Save the image
+		// Save the image to user-specific directory
 		fileName := fmt.Sprintf("infograph_%d.png", time.Now().UnixNano())
-		uploadDir := "./data/uploads"
+		var uploadDir string
+		if userID != "" {
+			uploadDir = filepath.Join("./data/uploads", userID)
+		} else {
+			uploadDir = "./data/uploads"
+		}
+
 		if err := os.MkdirAll(uploadDir, 0755); err != nil {
 			return "", fmt.Errorf("failed to create upload directory: %w", err)
 		}

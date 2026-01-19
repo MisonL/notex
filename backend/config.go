@@ -56,6 +56,19 @@ type Config struct {
 	// LangSmith tracing (optional)
 	LangChainAPIKey    string
 	LangChainProject   string
+
+	// Auth settings
+	JWTSecret string
+
+	// GitHub OAuth
+	GithubClientID     string
+	GithubClientSecret string
+	GithubRedirectURL  string
+
+	// Google OAuth
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURL  string
 }
 
 // loadEnv loads .env file if it exists (ignoring errors if file not found)
@@ -102,6 +115,16 @@ func LoadConfig() Config {
 		AllowNotebookRename:        getEnvBool("ALLOW_NOTEBOOK_RENAME", true),
 		LangChainAPIKey:  getEnv("LANGCHAIN_API_KEY", ""),
 		LangChainProject: getEnv("LANGCHAIN_PROJECT", "open-notebook"),
+		
+		JWTSecret:        getEnv("JWT_SECRET", "your-secret-key-change-me"),
+		
+		GithubClientID:     getEnv("GITHUB_CLIENT_ID", ""),
+		GithubClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
+		GithubRedirectURL:  getEnv("GITHUB_REDIRECT_URL", ""),
+		
+		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
+		GoogleRedirectURL:  getEnv("GOOGLE_REDIRECT_URL", ""),
 	}
 
 	// Auto-detect provider from base URL or model name

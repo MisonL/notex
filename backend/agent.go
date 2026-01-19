@@ -164,7 +164,7 @@ func (a *Agent) GenerateTransformation(ctx context.Context, req *TransformationR
 // Chat performs a chat query with RAG
 func (a *Agent) Chat(ctx context.Context, notebookID, message string, history []ChatMessage) (*ChatResponse, error) {
 	// Perform similarity search to find relevant sources
-	docs, err := a.vectorStore.SimilaritySearch(ctx, message, a.cfg.MaxSources)
+	docs, err := a.vectorStore.SimilaritySearch(ctx, notebookID, message, a.cfg.MaxSources)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search documents: %w", err)
 	}

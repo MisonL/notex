@@ -52,15 +52,42 @@ func NewStore(cfg Config) (*Store, error) {
 // initSchema creates the database schema
 func (s *Store) initSchema() error {
 	schema := `
+	CREATE TABLE IF NOT EXISTS users (
+		id TEXT PRIMARY KEY,
+		email TEXT NOT NULL UNIQUE,
+		name TEXT,
+		avatar_url TEXT,
+		provider TEXT,
+		created_at INTEGER NOT NULL,
+		updated_at INTEGER NOT NULL
+	);
+
 	CREATE TABLE IF NOT EXISTS notebooks (
 		id TEXT PRIMARY KEY,
+		user_id TEXT,
 		name TEXT NOT NULL,
 		description TEXT,
 		created_at INTEGER NOT NULL,
 		updated_at INTEGER NOT NULL,
-		metadata TEXT
+		metadata TEXT,
+		FOREIGN KEY (user_id) REFERENCES users(id)
 	);
+	`
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
 
+	// Check if user_id column exists in notebooks table (migration)
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('notebooks') WHERE name='user_id'").Scan(&count)
+	if err == nil && count == 0 {
+		// Add user_id column
+		if _, err := s.db.Exec("ALTER TABLE notebooks ADD COLUMN user_id TEXT REFERENCES users(id)"); err != nil {
+			return fmt.Errorf("failed to add user_id column to notebooks: %w", err)
+		}
+	}
+
+	restSchema := `
 	CREATE TABLE IF NOT EXISTS sources (
 		id TEXT PRIMARY KEY,
 		notebook_id TEXT NOT NULL,
@@ -134,23 +161,103 @@ func (s *Store) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_podcasts_notebook ON podcasts(notebook_id);
 	`
 
-	_, err := s.db.Exec(schema)
+	_, err = s.db.Exec(restSchema)
 	return err
+}
+
+// User operations
+
+// CreateUser creates or updates a user
+func (s *Store) CreateUser(ctx context.Context, user *User) error {
+	now := time.Now()
+	if user.CreatedAt.IsZero() {
+		user.CreatedAt = now
+	}
+	user.UpdatedAt = now
+
+	// Check if user exists
+	existing, err := s.GetUserByEmail(ctx, user.Email)
+	if err == nil && existing != nil {
+		// Update existing user
+		user.ID = existing.ID
+		user.CreatedAt = existing.CreatedAt // Keep original created_at
+		_, err := s.db.ExecContext(ctx, `
+			UPDATE users 
+			SET name = ?, avatar_url = ?, provider = ?, updated_at = ?
+			WHERE id = ?
+		`, user.Name, user.AvatarURL, user.Provider, now.Unix(), user.ID)
+		return err
+	}
+
+	if user.ID == "" {
+		user.ID = uuid.New().String()
+	}
+
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO users (id, email, name, avatar_url, provider, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, user.ID, user.Email, user.Name, user.AvatarURL, user.Provider, user.CreatedAt.Unix(), user.UpdatedAt.Unix())
+
+	return err
+}
+
+// GetUser retrieves a user by ID
+func (s *Store) GetUser(ctx context.Context, id string) (*User, error) {
+	var user User
+	var createdAt, updatedAt int64
+
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, email, name, avatar_url, provider, created_at, updated_at
+		FROM users WHERE id = ?
+	`, id).Scan(&user.ID, &user.Email, &user.Name, &user.AvatarURL, &user.Provider, &createdAt, &updatedAt)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("user not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	user.CreatedAt = time.Unix(createdAt, 0)
+	user.UpdatedAt = time.Unix(updatedAt, 0)
+
+	return &user, nil
+}
+
+// GetUserByEmail retrieves a user by Email
+func (s *Store) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	var user User
+	var createdAt, updatedAt int64
+
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, email, name, avatar_url, provider, created_at, updated_at
+		FROM users WHERE email = ?
+	`, email).Scan(&user.ID, &user.Email, &user.Name, &user.AvatarURL, &user.Provider, &createdAt, &updatedAt)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("user not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	user.CreatedAt = time.Unix(createdAt, 0)
+	user.UpdatedAt = time.Unix(updatedAt, 0)
+
+	return &user, nil
 }
 
 // Notebook operations
 
 // CreateNotebook creates a new notebook
-func (s *Store) CreateNotebook(ctx context.Context, name, description string, metadata map[string]interface{}) (*Notebook, error) {
+func (s *Store) CreateNotebook(ctx context.Context, userID, name, description string, metadata map[string]interface{}) (*Notebook, error) {
 	id := uuid.New().String()
 	now := time.Now()
 
 	metadataJSON, _ := json.Marshal(metadata)
 
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO notebooks (id, name, description, created_at, updated_at, metadata)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, id, name, description, now.Unix(), now.Unix(), string(metadataJSON))
+		INSERT INTO notebooks (id, user_id, name, description, created_at, updated_at, metadata)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, id, userID, name, description, now.Unix(), now.Unix(), string(metadataJSON))
 	if err != nil {
 		return nil, err
 	}
@@ -163,16 +270,21 @@ func (s *Store) GetNotebook(ctx context.Context, id string) (*Notebook, error) {
 	var nb Notebook
 	var metadataJSON string
 	var createdAt, updatedAt int64
+	var userID sql.NullString
 
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, name, description, created_at, updated_at, metadata
+		SELECT id, user_id, name, description, created_at, updated_at, metadata
 		FROM notebooks WHERE id = ?
-	`, id).Scan(&nb.ID, &nb.Name, &nb.Description, &createdAt, &updatedAt, &metadataJSON)
+	`, id).Scan(&nb.ID, &userID, &nb.Name, &nb.Description, &createdAt, &updatedAt, &metadataJSON)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("notebook not found")
 	}
 	if err != nil {
 		return nil, err
+	}
+	
+	if userID.Valid {
+		nb.UserID = userID.String
 	}
 
 	nb.CreatedAt = time.Unix(createdAt, 0)
@@ -187,12 +299,14 @@ func (s *Store) GetNotebook(ctx context.Context, id string) (*Notebook, error) {
 	return &nb, nil
 }
 
-// ListNotebooks retrieves all notebooks
-func (s *Store) ListNotebooks(ctx context.Context) ([]Notebook, error) {
+// ListNotebooks retrieves all notebooks for a user
+func (s *Store) ListNotebooks(ctx context.Context, userID string) ([]Notebook, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, name, description, created_at, updated_at, metadata
-		FROM notebooks ORDER BY updated_at DESC
-	`)
+		SELECT id, user_id, name, description, created_at, updated_at, metadata
+		FROM notebooks 
+		WHERE user_id = ?
+		ORDER BY updated_at DESC
+	`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -203,9 +317,14 @@ func (s *Store) ListNotebooks(ctx context.Context) ([]Notebook, error) {
 		var nb Notebook
 		var metadataJSON string
 		var createdAt, updatedAt int64
+		var uid sql.NullString
 
-		if err := rows.Scan(&nb.ID, &nb.Name, &nb.Description, &createdAt, &updatedAt, &metadataJSON); err != nil {
+		if err := rows.Scan(&nb.ID, &uid, &nb.Name, &nb.Description, &createdAt, &updatedAt, &metadataJSON); err != nil {
 			return nil, err
+		}
+		
+		if uid.Valid {
+			nb.UserID = uid.String
 		}
 
 		nb.CreatedAt = time.Unix(createdAt, 0)
@@ -247,18 +366,19 @@ func (s *Store) DeleteNotebook(ctx context.Context, id string) error {
 	return err
 }
 
-// ListNotebooksWithStats retrieves all notebooks with their source and note counts
-func (s *Store) ListNotebooksWithStats(ctx context.Context) ([]NotebookWithStats, error) {
+// ListNotebooksWithStats retrieves all notebooks with their source and note counts for a user
+func (s *Store) ListNotebooksWithStats(ctx context.Context, userID string) ([]NotebookWithStats, error) {
 	query := `
 		SELECT
-			n.id, n.name, n.description, n.created_at, n.updated_at, n.metadata,
+			n.id, n.user_id, n.name, n.description, n.created_at, n.updated_at, n.metadata,
 			COALESCE((SELECT COUNT(*) FROM sources WHERE notebook_id = n.id), 0) as source_count,
 			COALESCE((SELECT COUNT(*) FROM notes WHERE notebook_id = n.id), 0) as note_count
 		FROM notebooks n
+		WHERE n.user_id = ?
 		ORDER BY n.updated_at DESC
 	`
 
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := s.db.QueryContext(ctx, query, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -269,9 +389,14 @@ func (s *Store) ListNotebooksWithStats(ctx context.Context) ([]NotebookWithStats
 		var nb NotebookWithStats
 		var metadataJSON string
 		var createdAt, updatedAt int64
+		var uid sql.NullString
 
-		if err := rows.Scan(&nb.ID, &nb.Name, &nb.Description, &createdAt, &updatedAt, &metadataJSON, &nb.SourceCount, &nb.NoteCount); err != nil {
+		if err := rows.Scan(&nb.ID, &uid, &nb.Name, &nb.Description, &createdAt, &updatedAt, &metadataJSON, &nb.SourceCount, &nb.NoteCount); err != nil {
 			return nil, err
+		}
+		
+		if uid.Valid {
+			nb.UserID = uid.String
 		}
 
 		nb.CreatedAt = time.Unix(createdAt, 0)

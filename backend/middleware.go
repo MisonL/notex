@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/kataras/golog"
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 )
@@ -176,3 +178,47 @@ func AuditMiddlewareLite() gin.HandlerFunc {
 		auditLogger.Info(msg)
 	}
 }
+		
+		// AuthMiddleware authenticates requests using JWT
+		func AuthMiddleware(secret string) gin.HandlerFunc {
+			return func(c *gin.Context) {
+				tokenString := c.GetHeader("Authorization")
+				if tokenString == "" {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+					return
+				}
+		
+				// Remove "Bearer " prefix
+				if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+					tokenString = tokenString[7:]
+				}
+		
+				token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+					if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+						return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+					}
+					return []byte(secret), nil
+				})
+		
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+					return
+				}
+		
+				if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+					userID, ok := claims["user_id"].(string)
+					if !ok {
+						c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+						return
+					}
+					c.Set("user_id", userID)
+				} else {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+					return
+				}
+		
+				c.Next()
+			}
+		}
+		
+		

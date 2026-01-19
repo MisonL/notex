@@ -118,7 +118,7 @@ func runIngestMode(ctx context.Context, cfg backend.Config, filePath, notebookNa
 	}
 
 	// Create or get notebook
-	notebooks, _ := store.ListNotebooks(ctx)
+	notebooks, _ := store.ListNotebooks(ctx, "")
 	var notebookID string
 	for _, nb := range notebooks {
 		if nb.Name == notebookName {
@@ -128,7 +128,7 @@ func runIngestMode(ctx context.Context, cfg backend.Config, filePath, notebookNa
 	}
 
 	if notebookID == "" {
-		nb, err := store.CreateNotebook(ctx, notebookName, "Created by ingest mode", nil)
+		nb, err := store.CreateNotebook(ctx, "", notebookName, "Created by ingest mode", nil)
 		if err != nil {
 			golog.Fatalf("failed to create notebook: %v", err)
 		}
@@ -159,7 +159,7 @@ func runIngestMode(ctx context.Context, cfg backend.Config, filePath, notebookNa
 	}
 
 	// Ingest document
-	if _, err := vectorStore.IngestText(ctx, source.Name, content); err != nil {
+	if _, err := vectorStore.IngestText(ctx, notebookID, source.Name, content); err != nil {
 		golog.Fatalf("ingestion failed: %v", err)
 	}
 

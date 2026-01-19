@@ -26,6 +26,7 @@ type Server struct {
 	store       *CachedStore
 	agent       *Agent
 	http        *gin.Engine
+	auth        *AuthHandler
 	// Track which notebooks have been loaded into vector store
 	loadedNotebooks map[string]bool
 	vectorMutex     sync.RWMutex
@@ -53,6 +54,9 @@ func NewServer(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create agent: %w", err)
 	}
+	
+	// Initialize auth handler
+	authHandler := NewAuthHandler(cfg, baseStore)
 
 	// Create Gin router
 	gin.SetMode(gin.ReleaseMode)
@@ -65,6 +69,7 @@ func NewServer(cfg Config) (*Server, error) {
 		store:           store,
 		agent:           agent,
 		http:            router,
+		auth:            authHandler,
 		loadedNotebooks: make(map[string]bool),
 	}
 
@@ -93,10 +98,19 @@ func (s *Server) setupRoutes() {
 		content, _ := frontendFS.ReadFile("frontend/index.html")
 		c.Data(http.StatusOK, "text/html; charset=utf-8", content)
 	})
+	
+	// Auth routes
+	auth := s.http.Group("/auth")
+	{
+		auth.GET("/login/:provider", s.auth.HandleLogin)
+		auth.GET("/callback/:provider", s.auth.HandleCallback)
+		auth.GET("/me", AuthMiddleware(s.cfg.JWTSecret), s.auth.HandleMe)
+	}
 
 	// API routes
 	api := s.http.Group("/api")
-	api.Use(AuditMiddlewareLite()) // Only audit API routes, not static resources
+	api.Use(AuditMiddlewareLite())
+	api.Use(AuthMiddleware(s.cfg.JWTSecret)) // Apply JWT Auth
 	{
 		// Health check
 		api.GET("/health", s.handleHealth)
@@ -159,7 +173,7 @@ func (s *Server) loadNotebookVectorIndex(ctx context.Context, notebookID string)
 
 	for _, src := range sources {
 		if src.Content != "" {
-			if _, err := s.vectorStore.IngestText(ctx, src.Name, src.Content); err != nil {
+			if _, err := s.vectorStore.IngestText(ctx, notebookID, src.Name, src.Content); err != nil {
 				golog.Errorf("failed to load source %s: %v", src.Name, err)
 			}
 		}
@@ -203,7 +217,9 @@ func (s *Server) handleConfig(c *gin.Context) {
 
 func (s *Server) handleListNotebooks(c *gin.Context) {
 	ctx := context.Background()
-	notebooks, err := s.store.ListNotebooks(ctx)
+	userID := c.GetString("user_id")
+	
+	notebooks, err := s.store.ListNotebooks(ctx, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to list notebooks"})
 		return
@@ -213,7 +229,9 @@ func (s *Server) handleListNotebooks(c *gin.Context) {
 
 func (s *Server) handleListNotebooksWithStats(c *gin.Context) {
 	ctx := context.Background()
-	notebooks, err := s.store.ListNotebooksWithStats(ctx)
+	userID := c.GetString("user_id")
+
+	notebooks, err := s.store.ListNotebooksWithStats(ctx, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to list notebooks with stats"})
 		return
@@ -223,6 +241,7 @@ func (s *Server) handleListNotebooksWithStats(c *gin.Context) {
 
 func (s *Server) handleCreateNotebook(c *gin.Context) {
 	ctx := context.Background()
+	userID := c.GetString("user_id")
 
 	var req struct {
 		Name        string                 `json:"name" binding:"required"`
@@ -235,7 +254,7 @@ func (s *Server) handleCreateNotebook(c *gin.Context) {
 		return
 	}
 
-	notebook, err := s.store.CreateNotebook(ctx, req.Name, req.Description, req.Metadata)
+	notebook, err := s.store.CreateNotebook(ctx, userID, req.Name, req.Description, req.Metadata)
 	if err != nil {
 		golog.Errorf("error creating notebook: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to create notebook: %v", err)})
@@ -248,10 +267,17 @@ func (s *Server) handleCreateNotebook(c *gin.Context) {
 func (s *Server) handleGetNotebook(c *gin.Context) {
 	ctx := context.Background()
 	id := c.Param("id")
+	userID := c.GetString("user_id")
 
 	notebook, err := s.store.GetNotebook(ctx, id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Notebook not found"})
+		return
+	}
+	
+	// Check ownership
+	if notebook.UserID != "" && notebook.UserID != userID {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Access denied"})
 		return
 	}
 
@@ -261,6 +287,18 @@ func (s *Server) handleGetNotebook(c *gin.Context) {
 func (s *Server) handleUpdateNotebook(c *gin.Context) {
 	ctx := context.Background()
 	id := c.Param("id")
+	userID := c.GetString("user_id")
+
+	// Check ownership first
+	existing, err := s.store.GetNotebook(ctx, id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Notebook not found"})
+		return
+	}
+	if existing.UserID != "" && existing.UserID != userID {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Access denied"})
+		return
+	}
 
 	var req struct {
 		Name        string                 `json:"name"`
@@ -285,6 +323,18 @@ func (s *Server) handleUpdateNotebook(c *gin.Context) {
 func (s *Server) handleDeleteNotebook(c *gin.Context) {
 	ctx := context.Background()
 	id := c.Param("id")
+	userID := c.GetString("user_id")
+
+	// Check ownership first
+	existing, err := s.store.GetNotebook(ctx, id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Notebook not found"})
+		return
+	}
+	if existing.UserID != "" && existing.UserID != userID {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Access denied"})
+		return
+	}
 
 	if err := s.store.DeleteNotebook(ctx, id); err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to delete notebook"})
@@ -299,6 +349,12 @@ func (s *Server) handleDeleteNotebook(c *gin.Context) {
 func (s *Server) handleListSources(c *gin.Context) {
 	ctx := context.Background()
 	notebookID := c.Param("id")
+	userID := c.GetString("user_id")
+
+	if err := s.checkNotebookAccess(ctx, notebookID, userID); err != nil {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
+		return
+	}
 
 	sources, err := s.store.ListSources(ctx, notebookID)
 	if err != nil {
@@ -312,6 +368,12 @@ func (s *Server) handleListSources(c *gin.Context) {
 func (s *Server) handleAddSource(c *gin.Context) {
 	ctx := context.Background()
 	notebookID := c.Param("id")
+	userID := c.GetString("user_id")
+
+	if err := s.checkNotebookAccess(ctx, notebookID, userID); err != nil {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
+		return
+	}
 
 	var req struct {
 		Name     string                 `json:"name" binding:"required"`
@@ -355,7 +417,7 @@ func (s *Server) handleAddSource(c *gin.Context) {
 
 	// Ingest into vector store (synchronous for immediate availability)
 	if source.Content != "" {
-		if chunkCount, err := s.vectorStore.IngestText(ctx, source.Name, source.Content); err != nil {
+		if chunkCount, err := s.vectorStore.IngestText(ctx, notebookID, source.Name, source.Content); err != nil {
 			golog.Errorf("failed to ingest text: %v", err)
 		} else {
 			s.store.UpdateSourceChunkCount(ctx, source.ID, chunkCount)
@@ -368,6 +430,19 @@ func (s *Server) handleAddSource(c *gin.Context) {
 func (s *Server) handleDeleteSource(c *gin.Context) {
 	ctx := context.Background()
 	sourceID := c.Param("sourceId")
+	userID := c.GetString("user_id")
+
+	// Need to check notebook ownership. First get source to get notebookID
+	source, err := s.store.GetSource(ctx, sourceID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Source not found"})
+		return
+	}
+	
+	if err := s.checkNotebookAccess(ctx, source.NotebookID, userID); err != nil {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
+		return
+	}
 
 	if err := s.store.DeleteSource(ctx, sourceID); err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to delete source"})
@@ -377,11 +452,29 @@ func (s *Server) handleDeleteSource(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (s *Server) checkNotebookAccess(ctx context.Context, notebookID, userID string) error {
+	notebook, err := s.store.GetNotebook(ctx, notebookID)
+	if err != nil {
+		return fmt.Errorf("notebook not found")
+	}
+	if notebook.UserID != "" && notebook.UserID != userID {
+		return fmt.Errorf("access denied")
+	}
+	return nil
+}
+
 func (s *Server) handleUpload(c *gin.Context) {
 	ctx := context.Background()
 	notebookID := c.PostForm("notebook_id")
+	userID := c.GetString("user_id")
+	
 	if notebookID == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "notebook_id required"})
+		return
+	}
+	
+	if err := s.checkNotebookAccess(ctx, notebookID, userID); err != nil {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
 		return
 	}
 
@@ -446,7 +539,7 @@ func (s *Server) handleUpload(c *gin.Context) {
 	totalDocsBefore := stats.TotalDocuments
 
 	if source.Content != "" {
-		if _, err := s.vectorStore.IngestText(ctx, source.Name, source.Content); err != nil {
+		if _, err := s.vectorStore.IngestText(ctx, notebookID, source.Name, source.Content); err != nil {
 			golog.Errorf("failed to ingest document: %v", err)
 		} else {
 			// Get updated stats to calculate chunk count
@@ -679,7 +772,7 @@ func (s *Server) handleTransform(c *gin.Context) {
 			golog.Errorf("failed to create insight source: %v", err)
 		} else {
 			// Ingest into vector store for future reference
-			if chunkCount, err := s.vectorStore.IngestText(ctx, insightSource.Name, insightSource.Content); err != nil {
+			if chunkCount, err := s.vectorStore.IngestText(ctx, notebookID, insightSource.Name, insightSource.Content); err != nil {
 				golog.Errorf("failed to ingest insight text: %v", err)
 			} else {
 				s.store.UpdateSourceChunkCount(ctx, insightSource.ID, chunkCount)

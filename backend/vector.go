@@ -41,7 +41,7 @@ func NewVectorStore(cfg Config) (*VectorStore, error) {
 }
 
 // IngestDocuments loads and indexes documents from file paths
-func (vs *VectorStore) IngestDocuments(ctx context.Context, paths []string) error {
+func (vs *VectorStore) IngestDocuments(ctx context.Context, notebookID string, paths []string) error {
 	for _, path := range paths {
 		fmt.Printf("[VectorStore] Loading file: %s\n", path)
 
@@ -51,7 +51,7 @@ func (vs *VectorStore) IngestDocuments(ctx context.Context, paths []string) erro
 		}
 
 		fmt.Printf("[VectorStore] File loaded, size: %d bytes\n", len(content))
-		if _, err := vs.IngestText(ctx, filepath.Base(path), content); err != nil {
+		if _, err := vs.IngestText(ctx, notebookID, filepath.Base(path), content); err != nil {
 			return err
 		}
 	}
@@ -76,7 +76,7 @@ func (vs *VectorStore) ExtractDocument(ctx context.Context, path string) (string
 }
 
 // IngestText ingests raw text content
-func (vs *VectorStore) IngestText(ctx context.Context, sourceName, content string) (int, error) {
+func (vs *VectorStore) IngestText(ctx context.Context, notebookID, sourceName, content string) (int, error) {
 	// Split content into chunks
 	chunks := vs.splitText(content, vs.cfg.ChunkSize, vs.cfg.ChunkOverlap)
 
@@ -88,8 +88,9 @@ func (vs *VectorStore) IngestText(ctx context.Context, sourceName, content strin
 		doc := schema.Document{
 			PageContent: chunk,
 			Metadata: map[string]any{
-				"source": sourceName,
-				"chunk":  i,
+				"notebook_id": notebookID,
+				"source":      sourceName,
+				"chunk":       i,
 			},
 		}
 		vs.docs = append(vs.docs, doc)
@@ -108,23 +109,33 @@ func (vs *VectorStore) splitText(text string, chunkSize, chunkOverlap int) []str
 		chunkOverlap = 200
 	}
 
-	fmt.Printf("[VectorStore] Splitting text (len=%d, chunkSize=%d, overlap=%d)\n", len(text), chunkSize, chunkOverlap)
+	// Quiet output for large texts
+	if len(text) > 10000 {
+		fmt.Printf("[VectorStore] Splitting text (len=%d)...\n", len(text))
+	} else {
+		fmt.Printf("[VectorStore] Splitting text (len=%d, chunkSize=%d, overlap=%d)\n", len(text), chunkSize, chunkOverlap)
+	}
 
 	var chunks []string
 
 	// Check if text contains mostly CJK characters (Chinese, Japanese, Korean)
 	runes := []rune(text)
 	cjkCount := 0
-	for _, r := range runes {
+	sampleSize := 1000
+	if len(runes) < sampleSize {
+		sampleSize = len(runes)
+	}
+	for i := 0; i < sampleSize; i++ {
+		r := runes[i]
 		if r >= 0x4E00 && r <= 0x9FFF { // CJK Unified Ideographs
 			cjkCount++
 		}
 	}
-	cjkRatio := float64(cjkCount) / float64(len(runes))
+	cjkRatio := float64(cjkCount) / float64(sampleSize)
 
 	if cjkRatio > 0.3 {
 		// For CJK text, split by character count (runes)
-		fmt.Println("[VectorStore] Using CJK splitting (by character count)")
+		// fmt.Println("[VectorStore] Using CJK splitting (by character count)")
 		for i := 0; i < len(runes); i += (chunkSize - chunkOverlap) {
 			end := i + chunkSize
 			if end > len(runes) {
@@ -140,7 +151,7 @@ func (vs *VectorStore) splitText(text string, chunkSize, chunkOverlap int) []str
 		}
 	} else {
 		// For Western text, split by words
-		fmt.Println("[VectorStore] Using word-based splitting")
+		// fmt.Println("[VectorStore] Using word-based splitting")
 		words := strings.Fields(text)
 
 		for i := 0; i < len(words); i += (chunkSize - chunkOverlap) {
@@ -158,12 +169,12 @@ func (vs *VectorStore) splitText(text string, chunkSize, chunkOverlap int) []str
 		}
 	}
 
-	fmt.Printf("[VectorStore] Created %d chunks\n", len(chunks))
+	// fmt.Printf("[VectorStore] Created %d chunks\n", len(chunks))
 	return chunks
 }
 
 // SimilaritySearch performs a similarity search (simple keyword matching for now)
-func (vs *VectorStore) SimilaritySearch(ctx context.Context, query string, numDocs int) ([]schema.Document, error) {
+func (vs *VectorStore) SimilaritySearch(ctx context.Context, notebookID, query string, numDocs int) ([]schema.Document, error) {
 	if numDocs <= 0 {
 		numDocs = 5
 	}
@@ -171,10 +182,22 @@ func (vs *VectorStore) SimilaritySearch(ctx context.Context, query string, numDo
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
 
-	fmt.Printf("[VectorStore] Searching for '%s' (total docs: %d)\n", query, len(vs.docs))
+	// fmt.Printf("[VectorStore] Searching for '%s' in notebook %s (total docs: %d)\n", query, notebookID, len(vs.docs))
 
 	if len(vs.docs) == 0 {
-		fmt.Println("[VectorStore] No documents available for search")
+		// fmt.Println("[VectorStore] No documents available for search")
+		return []schema.Document{}, nil
+	}
+
+	// Filter docs by notebookID
+	candidateDocs := make([]schema.Document, 0)
+	for _, doc := range vs.docs {
+		if nid, ok := doc.Metadata["notebook_id"].(string); ok && nid == notebookID {
+			candidateDocs = append(candidateDocs, doc)
+		}
+	}
+	
+	if len(candidateDocs) == 0 {
 		return []schema.Document{}, nil
 	}
 
@@ -188,8 +211,8 @@ func (vs *VectorStore) SimilaritySearch(ctx context.Context, query string, numDo
 		score float64
 	}
 
-	scores := make([]docScore, 0, len(vs.docs))
-	for _, doc := range vs.docs {
+	scores := make([]docScore, 0, len(candidateDocs))
+	for _, doc := range candidateDocs {
 		content := strings.ToLower(doc.PageContent)
 		score := 0.0
 
@@ -234,7 +257,7 @@ func (vs *VectorStore) SimilaritySearch(ctx context.Context, query string, numDo
 		}
 	}
 
-	fmt.Printf("[VectorStore] Found %d matching documents\n", len(scores))
+	// fmt.Printf("[VectorStore] Found %d matching documents\n", len(scores))
 
 	// Sort by score descending
 	for i := 0; i < len(scores); i++ {
@@ -245,13 +268,14 @@ func (vs *VectorStore) SimilaritySearch(ctx context.Context, query string, numDo
 		}
 	}
 
-	// If no matches found, return all documents (fallback)
+	// If no matches found, return top recent documents (fallback)
 	// This allows the LLM to use the full context
 	if len(scores) == 0 {
-		fmt.Println("[VectorStore] No matches found, returning all documents as fallback")
-		result := make([]schema.Document, 0, min(numDocs, len(vs.docs)))
-		for i := 0; i < len(result); i++ {
-			result = append(result, vs.docs[i])
+		// fmt.Println("[VectorStore] No matches found, returning fallback documents")
+		result := make([]schema.Document, 0, min(numDocs, len(candidateDocs)))
+		// Return from end (most recent)
+		for i := len(candidateDocs) - 1; i >= 0 && len(result) < numDocs; i-- {
+			result = append(result, candidateDocs[i])
 		}
 		return result, nil
 	}
@@ -260,10 +284,6 @@ func (vs *VectorStore) SimilaritySearch(ctx context.Context, query string, numDo
 	result := make([]schema.Document, 0, numDocs)
 	for i := 0; i < len(scores) && i < numDocs; i++ {
 		result = append(result, scores[i].doc)
-	}
-
-	if len(result) > 0 {
-		fmt.Printf("[VectorStore] Returning top %d results (best score: %.2f)\n", len(result), scores[0].score)
 	}
 
 	return result, nil

@@ -10,6 +10,27 @@
     <link rel="stylesheet" href="/static/style.css?v=10">
     <script src="https://s4.zstatic.net/ajax/libs/marked/16.3.0/lib/marked.umd.min.js"></script>
     <script src="https://s4.zstatic.net/ajax/libs/mermaid/11.4.0/mermaid.min.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            },
+            startup: {
+                pageReady: () => {
+                    return MathJax.startup.defaultPageReady().then(() => {
+                        console.log('MathJax initial complete');
+                    });
+                }
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://s4.zstatic.net/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
     <div class="app-container">

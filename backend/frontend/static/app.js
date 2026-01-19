@@ -1599,6 +1599,15 @@ class OpenNotebook {
             }
         }
 
+        // Render MathJax if available
+        if (window.MathJax && window.MathJax.typesetPromise) {
+            try {
+                await MathJax.typesetPromise([document.querySelector('.note-view-content')]);
+            } catch (e) {
+                console.warn('MathJax rendering error:', e);
+            }
+        }
+
         // Switch to note tab
         this.switchPanelTab('note');
 
@@ -1875,6 +1884,14 @@ class OpenNotebook {
         }
 
         container.appendChild(clone);
+
+        // Render MathJax for the new message if available
+        if (window.MathJax && window.MathJax.typesetPromise && role === 'assistant') {
+            MathJax.typesetPromise([messageText]).catch(err => {
+                console.warn('MathJax rendering error:', err);
+            });
+        }
+
         container.scrollTop = container.scrollHeight;
     }
 

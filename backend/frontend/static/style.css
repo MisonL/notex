@@ -1661,6 +1661,42 @@ body {
     accent-color: var(--accent-primary);
 }
 
+/* MathJax styles */
+.markdown-content .math,
+.markdown-content span[id^='MathJax'],
+.markdown-content mjx-container {
+    color: var(--text-primary);
+}
+
+.markdown-content mjx-container {
+    margin: 0.5em 0;
+}
+
+.markdown-content mjx-container[jax='CHTML'][display='true'] {
+    margin: 1em 0;
+}
+
+/* Fix for inline math */
+.markdown-content mjx-container[jax='CHTML'][display='true'] {
+    display: inline;
+    margin: 0;
+}
+
+/* Display math (block) */
+.markdown-content .mjx-chtml {
+    font-size: 110%;
+}
+
+/* Chat message MathJax styles */
+.message-text mjx-container {
+    margin: 0.3em 0;
+}
+
+.message-text mjx-container[jax='CHTML'][display='true'] {
+    display: inline;
+    margin: 0;
+}
+
 .note-meta {
     display: flex;
     align-items: center;

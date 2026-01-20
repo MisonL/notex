@@ -175,6 +175,8 @@ func (s *Server) setupRoutes() {
 	public := s.http.Group("/public")
 	public.Use(AuditMiddlewareLite())
 	{
+		// List all public notebooks with infograph or ppt notes
+		public.GET("/notebooks", s.handleListPublicNotebooks)
 		// Get public notebook by token
 		public.GET("/notebooks/:token", s.handleGetPublicNotebook)
 		// Get public notebook sources
@@ -1322,6 +1324,19 @@ func (s *Server) handleListPublicNotes(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, notes)
+}
+
+// handleListPublicNotebooks lists all public notebooks with infograph or ppt notes
+func (s *Server) handleListPublicNotebooks(c *gin.Context) {
+	ctx := context.Background()
+
+	notebooks, err := s.store.ListPublicNotebooks(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to list public notebooks"})
+		return
+	}
+
+	c.JSON(http.StatusOK, notebooks)
 }
 
 // handleServePublicFile serves files for public notebooks

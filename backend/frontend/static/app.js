@@ -768,6 +768,7 @@ class OpenNotebook {
 
     renderNotebooks() {
         this.renderNotebookCards();
+        this.loadPublicNotebooksShowcase();
     }
 
     renderNotebookCards() {
@@ -837,6 +838,65 @@ class OpenNotebook {
             });
 
             container.appendChild(clone);
+        });
+    }
+
+    // Load and render public notebooks showcase
+    async loadPublicNotebooksShowcase() {
+        try {
+            const response = await fetch('/public/notebooks');
+            if (!response.ok) return;
+
+            const notebooks = await response.json();
+            this.renderPublicNotebooksShowcase(notebooks);
+        } catch (error) {
+            console.error('Failed to load public notebooks showcase:', error);
+        }
+    }
+
+    renderPublicNotebooksShowcase(notebooks) {
+        const container = document.getElementById('publicShowcase');
+        const grid = document.getElementById('publicShowcaseGrid');
+
+        if (!container || !grid) return;
+
+        grid.innerHTML = '';
+
+        if (notebooks.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+
+        notebooks.forEach(nb => {
+            const card = document.createElement('a');
+            card.className = 'public-showcase-card';
+            card.href = `/public/${nb.public_token}`;
+
+            card.innerHTML = `
+                <div class="public-showcase-card-header">
+                    <div class="public-showcase-card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path d="M3 9h18"/>
+                            <path d="M9 21V9"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="public-showcase-card-title">${this.escapeHtml(nb.name)}</h3>
+                    </div>
+                </div>
+                <p class="public-showcase-card-desc">${this.escapeHtml(nb.description || '暂无描述')}</p>
+                <div class="public-showcase-card-footer">
+                    <div class="public-showcase-card-stats">
+                        <span>${nb.source_count || 0} 来源</span>
+                        <span>${nb.note_count || 0} 笔记</span>
+                    </div>
+                </div>
+            `;
+
+            grid.appendChild(card);
         });
     }
 

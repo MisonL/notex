@@ -544,6 +544,64 @@ func (s *Store) ListNotebooksWithStats(ctx context.Context, userID string) ([]No
 	return notebooks, nil
 }
 
+// ListPublicNotebooks lists public notebooks that have infograph or ppt notes
+func (s *Store) ListPublicNotebooks(ctx context.Context) ([]NotebookWithStats, error) {
+	query := `
+		SELECT DISTINCT
+			n.id, n.user_id, n.name, n.description, n.is_public, n.public_token, n.created_at, n.updated_at, n.metadata,
+			COALESCE((SELECT COUNT(*) FROM sources WHERE notebook_id = n.id), 0) as source_count,
+			COALESCE((SELECT COUNT(*) FROM notes WHERE notebook_id = n.id), 0) as note_count
+		FROM notebooks n
+		INNER JOIN notes notes ON notes.notebook_id = n.id
+		WHERE n.is_public = 1
+			AND notes.type IN ('infograph', 'ppt')
+		ORDER BY n.updated_at DESC
+		LIMIT 20
+	`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	notebooks := make([]NotebookWithStats, 0)
+	for rows.Next() {
+		var nb NotebookWithStats
+		var metadataJSON string
+		var createdAt, updatedAt int64
+		var uid sql.NullString
+		var isPublic sql.NullInt64
+		var publicToken sql.NullString
+
+		if err := rows.Scan(&nb.ID, &uid, &nb.Name, &nb.Description, &isPublic, &publicToken, &createdAt, &updatedAt, &metadataJSON, &nb.SourceCount, &nb.NoteCount); err != nil {
+			return nil, err
+		}
+
+		if uid.Valid {
+			nb.UserID = uid.String
+		}
+
+		nb.IsPublic = isPublic.Valid && isPublic.Int64 > 0
+		if publicToken.Valid {
+			nb.PublicToken = publicToken.String
+		}
+
+		nb.CreatedAt = time.Unix(createdAt, 0)
+		nb.UpdatedAt = time.Unix(updatedAt, 0)
+
+		if metadataJSON != "" {
+			json.Unmarshal([]byte(metadataJSON), &nb.Metadata)
+		} else {
+			nb.Metadata = make(map[string]interface{})
+		}
+
+		notebooks = append(notebooks, nb)
+	}
+
+	return notebooks, nil
+}
+
 // Source operations
 
 // CreateSource creates a new source

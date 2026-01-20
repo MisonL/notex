@@ -215,14 +215,14 @@ class OpenNotebook {
             this.currentNotebook = notebook;
             this.currentPublicToken = token;
 
+            // 先显示笔记列表 tab（创建容器）
+            this.showNotesListTab();
+
             // 渲染 sources
             await this.renderSourcesList(sources);
 
-            // 渲染 notes 到紧凑网格视图
+            // 渲染 notes 到紧凑网格视图（容器已创建）
             await this.renderNotesCompactGridPublic(notes);
-
-            // 显示笔记列表 tab
-            this.showNotesListTab();
 
             // 设置为只读模式
             this.setReadOnlyMode(true);

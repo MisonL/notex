@@ -30,7 +30,24 @@ func NewAgent(cfg Config, vectorStore *VectorStore) (*Agent, error) {
 		return nil, fmt.Errorf("failed to create LLM: %w", err)
 	}
 
-	provider := NewGeminiClient(cfg.GoogleAPIKey, llm)
+	// Select image provider based on config
+	var provider LLMProvider
+	switch cfg.ImageProvider {
+	case "glm":
+		if cfg.GLMAPIKey == "" {
+			return nil, fmt.Errorf("glm_api_key is required when image_provider is 'glm'")
+		}
+		provider = NewGLMImageClient(cfg.GLMAPIKey)
+	case "zimage":
+		if cfg.ZImageAPIKey == "" {
+			return nil, fmt.Errorf("zimage_api_key is required when image_provider is 'zimage'")
+		}
+		provider = NewZImageClient(cfg.ZImageAPIKey)
+	case "gemini":
+		provider = NewGeminiClient(cfg.GoogleAPIKey, llm)
+	default:
+		return nil, fmt.Errorf("unknown image provider: %s (supported: gemini, glm, zimage)", cfg.ImageProvider)
+	}
 
 	return &Agent{
 		vectorStore: vectorStore,

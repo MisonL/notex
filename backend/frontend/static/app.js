@@ -749,6 +749,9 @@ class OpenNotebook {
         // Also remove token cookie
         document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
+        // Clear cache
+        this.cache.delete('notebooks');
+
         this.updateAuthUI();
 
         // Clear data
@@ -759,6 +762,9 @@ class OpenNotebook {
 
     // 笔记本方法
     async loadNotebooks() {
+        // Always load public notebooks showcase (regardless of private notebooks)
+        await this.loadPublicNotebooksShowcase();
+
         try {
             // 先尝试从缓存获取
             const cached = this.cache.get('notebooks');
@@ -778,7 +784,12 @@ class OpenNotebook {
             this.renderNotebooks();
             this.updateFooter();
         } catch (error) {
-            this.showError('加载笔记本失败');
+            // 401 Unauthorized is expected for non-logged-in users, don't show error
+            if (error.message && !error.message.includes('401')) {
+                console.warn('用户未登录，跳过私有笔记本加载');
+            } else {
+                this.showError('加载笔记本失败');
+            }
         }
     }
 
@@ -859,6 +870,10 @@ class OpenNotebook {
 
     // Load and render public notebooks showcase
     async loadPublicNotebooksShowcase() {
+        // Prevent duplicate calls
+        if (this._publicNotebooksLoaded) return;
+        this._publicNotebooksLoaded = true;
+
         try {
             const response = await fetch('/public/notebooks');
             if (!response.ok) return;
@@ -869,6 +884,9 @@ class OpenNotebook {
             console.error('Failed to load public notebooks showcase:', error);
         }
     }
+
+    // Cache to avoid duplicate calls
+    _publicNotebooksLoaded = false;
 
     renderPublicNotebooksShowcase(notebooks) {
         const container = document.getElementById('publicShowcase');
@@ -890,25 +908,17 @@ class OpenNotebook {
             card.className = 'public-showcase-card';
             card.href = `/public/${nb.public_token}`;
 
+            // Generate background style if cover image exists
+            if (nb.cover_image_url) {
+                card.style.backgroundImage = `url('${nb.cover_image_url}')`;
+                card.style.backgroundSize = 'cover';
+                card.style.backgroundPosition = 'center';
+                card.classList.add('has-cover-image');
+            }
+
             card.innerHTML = `
-                <div class="public-showcase-card-header">
-                    <div class="public-showcase-card-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <path d="M3 9h18"/>
-                            <path d="M9 21V9"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <h3 class="public-showcase-card-title">${this.escapeHtml(nb.name)}</h3>
-                    </div>
-                </div>
-                <p class="public-showcase-card-desc">${this.escapeHtml(nb.description || '暂无描述')}</p>
-                <div class="public-showcase-card-footer">
-                    <div class="public-showcase-card-stats">
-                        <span>${nb.source_count || 0} 来源</span>
-                        <span>${nb.note_count || 0} 笔记</span>
-                    </div>
+                <div class="public-showcase-card-content">
+                    <h3 class="public-showcase-card-title">${this.escapeHtml(nb.name)}</h3>
                 </div>
             `;
 

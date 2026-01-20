@@ -267,6 +267,12 @@ func (s *Server) handleListNotebooksWithStats(c *gin.Context) {
 	ctx := context.Background()
 	userID := c.GetString("user_id")
 
+	// If no user ID (anonymous or invalid token), return empty list
+	if userID == "" {
+		c.JSON(http.StatusOK, []NotebookWithStats{})
+		return
+	}
+
 	notebooks, err := s.store.ListNotebooksWithStats(ctx, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to list notebooks with stats"})
@@ -796,7 +802,8 @@ func (s *Server) handleTransform(c *gin.Context) {
 	if req.Type == "infograph" {
 		extra := "**注意：无论来源是什么语言，请务必使用中文**"
 		prompt := response.Content + "\n\n" + extra
-		imagePath, err := s.agent.provider.GenerateImage(ctx, "gemini-3-pro-image-preview", prompt, userID)
+		imageModel := s.getImageModelForProvider()
+		imagePath, err := s.agent.provider.GenerateImage(ctx, imageModel, prompt, userID)
 		if err != nil {
 			golog.Errorf("failed to generate infographic image: %v", err)
 			metadata["image_error"] = err.Error()
@@ -822,7 +829,8 @@ func (s *Server) handleTransform(c *gin.Context) {
 				// Combine style and slide content for the image generator
 				prompt := fmt.Sprintf("Style: %s\n\nSlide Content: %s", slides[0].Style, slide.Content)
 				prompt += "\n\n**注意：无论来源是什么语言，请务必使用中文**\n"
-				imagePath, err := s.agent.provider.GenerateImage(ctx, "gemini-3-pro-image-preview", prompt, userID)
+				imageModel := s.getImageModelForProvider()
+				imagePath, err := s.agent.provider.GenerateImage(ctx, imageModel, prompt, userID)
 				if err != nil {
 					golog.Errorf("failed to generate slide %d: %v", i+1, err)
 					continue
@@ -834,10 +842,15 @@ func (s *Server) handleTransform(c *gin.Context) {
 	}
 
 	// Save as note
-	// For infograph type, don't save text content (only show the image)
+	// For infograph type: clear content only when image generation succeeds
+	// If image generation fails, keep the prompt as content so user can see/retry it
 	noteContent := response.Content
 	if req.Type == "infograph" {
-		noteContent = "" // Clear content for infograph, only show image
+		// Check if image generation succeeded
+		if metadata["image_url"] != nil {
+			noteContent = "" // Clear content when image was generated successfully
+		}
+		// If image generation failed, noteContent remains as response.Content (the prompt)
 	}
 
 	note := &Note{
@@ -1213,6 +1226,21 @@ func writeFile(path, content string) error {
 
 func removeFile(path string) error {
 	return os.Remove(path)
+}
+
+// getImageModelForProvider returns the image model based on configured provider
+func (s *Server) getImageModelForProvider() string {
+	switch s.cfg.ImageProvider {
+	case "glm":
+		return s.cfg.GLMImageModel
+	case "zimage":
+		return s.cfg.ZImageModel
+	case "gemini":
+		return s.cfg.GeminiImageModel
+	default:
+		// Default to Gemini if provider is unknown
+		return s.cfg.GeminiImageModel
+	}
 }
 
 // Public sharing handlers

@@ -70,6 +70,7 @@ type NotebookWithStats struct {
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	SourceCount int                    `json:"source_count"`
 	NoteCount   int                    `json:"note_count"`
+	CoverImageURL string                 `json:"cover_image_url,omitempty"`
 }
 
 // ChatMessage represents a chat message

@@ -23,6 +23,14 @@ type Config struct {
 	OllamaBaseURL     string
 	OllamaModel       string
 
+	// Image generation settings
+	ImageProvider     string // "gemini", "glm", "zimage"
+	GLMAPIKey        string
+	GLMImageModel    string
+	GeminiImageModel string
+	ZImageAPIKey     string
+	ZImageModel      string
+
 	// Vector store settings
 	VectorStoreType    string // "memory", "supabase", "pgvector", "redis", "sqlite"
 	SupabaseURL        string
@@ -93,6 +101,12 @@ func LoadConfig() Config {
 		GoogleAPIKey:     getEnv("GOOGLE_API_KEY", ""),
 		OllamaBaseURL:    getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
 		OllamaModel:      getEnv("OLLAMA_MODEL", "llama3.2"),
+		ImageProvider:    getEnv("IMAGE_PROVIDER", "gemini"),
+		GLMAPIKey:       getEnv("GLM_API_KEY", ""),
+		GLMImageModel:   getEnv("GLM_IMAGE_MODEL", "glm-image"),
+		GeminiImageModel: getEnv("GEMINI_IMAGE_MODEL", "gemini-2.0-flash-exp"),
+		ZImageAPIKey:     getEnv("ZIMAGE_API_KEY", ""),
+		ZImageModel:      getEnv("ZIMAGE_MODEL", "z-image-turbo"),
 		VectorStoreType:  getEnv("VECTOR_STORE_TYPE", "sqlite"),
 		SupabaseURL:      getEnv("SUPABASE_URL", ""),
 		SupabaseKey:      getEnv("SUPABASE_KEY", ""),

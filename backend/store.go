@@ -550,9 +550,26 @@ func (s *Store) ListPublicNotebooks(ctx context.Context) ([]NotebookWithStats, e
 		SELECT DISTINCT
 			n.id, n.user_id, n.name, n.description, n.is_public, n.public_token, n.created_at, n.updated_at, n.metadata,
 			COALESCE((SELECT COUNT(*) FROM sources WHERE notebook_id = n.id), 0) as source_count,
-			COALESCE((SELECT COUNT(*) FROM notes WHERE notebook_id = n.id), 0) as note_count
+			COALESCE((SELECT COUNT(*) FROM notes WHERE notebook_id = n.id), 0) as note_count,
+			(
+				SELECT json_extract(notes.metadata, '$.image_url')
+				FROM notes
+				WHERE notes.notebook_id = n.id AND notes.type = 'infograph'
+					AND json_extract(notes.metadata, '$.image_url') IS NOT NULL
+				ORDER BY notes.created_at DESC
+				LIMIT 1
+			) as cover_image_url,
+			(
+				SELECT json_extract(notes.metadata, '$.slides[0]')
+				FROM notes
+				WHERE notes.notebook_id = n.id AND notes.type = 'ppt'
+					AND json_extract(notes.metadata, '$.slides') IS NOT NULL
+					AND json_array_length(json_extract(notes.metadata, '$.slides')) > 0
+				ORDER BY notes.created_at DESC
+				LIMIT 1
+			) as ppt_first_slide
 		FROM notebooks n
-		INNER JOIN notes notes ON notes.notebook_id = n.id
+			INNER JOIN notes notes ON notes.notebook_id = n.id
 		WHERE n.is_public = 1
 			AND notes.type IN ('infograph', 'ppt')
 		ORDER BY n.updated_at DESC
@@ -573,8 +590,10 @@ func (s *Store) ListPublicNotebooks(ctx context.Context) ([]NotebookWithStats, e
 		var uid sql.NullString
 		var isPublic sql.NullInt64
 		var publicToken sql.NullString
+		var coverImageURL sql.NullString
+		var pptFirstSlide sql.NullString
 
-		if err := rows.Scan(&nb.ID, &uid, &nb.Name, &nb.Description, &isPublic, &publicToken, &createdAt, &updatedAt, &metadataJSON, &nb.SourceCount, &nb.NoteCount); err != nil {
+		if err := rows.Scan(&nb.ID, &uid, &nb.Name, &nb.Description, &isPublic, &publicToken, &createdAt, &updatedAt, &metadataJSON, &nb.SourceCount, &nb.NoteCount, &coverImageURL, &pptFirstSlide); err != nil {
 			return nil, err
 		}
 
@@ -589,6 +608,20 @@ func (s *Store) ListPublicNotebooks(ctx context.Context) ([]NotebookWithStats, e
 
 		nb.CreatedAt = time.Unix(createdAt, 0)
 		nb.UpdatedAt = time.Unix(updatedAt, 0)
+
+		// Use infograph image URL first, then PPT first slide
+		if coverImageURL.Valid && coverImageURL.String != "" {
+			// Convert to web path (authenticated API)
+			fileName := filepath.Base(coverImageURL.String)
+			nb.CoverImageURL = "/api/files/" + fileName
+		} else if pptFirstSlide.Valid && pptFirstSlide.String != "" {
+			// Parse JSON array and extract first slide URL
+			var slides []string
+			if err := json.Unmarshal([]byte(pptFirstSlide.String), &slides); err == nil && len(slides) > 0 {
+				fileName := filepath.Base(slides[0])
+				nb.CoverImageURL = "/api/files/" + fileName
+			}
+		}
 
 		if metadataJSON != "" {
 			json.Unmarshal([]byte(metadataJSON), &nb.Metadata)

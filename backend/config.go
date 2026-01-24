@@ -64,6 +64,7 @@ type Config struct {
 
 	// Demo settings
 	AllowMultipleNotesOfSameType bool
+	AllowDelete                  bool
 
 	// LangSmith tracing (optional)
 	LangChainAPIKey  string

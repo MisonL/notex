@@ -3244,67 +3244,67 @@ class OpenNotebook {
 
     const [sources, notes] = await Promise.all([
       this.api(`/notebooks/${this.currentNotebook.id}/sources`),
-      this.api(`/notebooks/${this.currentNotebook.id}/notes`),
+      this.api(`/notebooks/${this.currentNotebook.id}/notes`)
     ]);
 
-    const notebookCard = document.querySelector(
-      `.notebook-card[data-id="${this.currentNotebook.id}"]`
-    );
+    const notebookCard = document.querySelector(`.notebook-card[data-id="${this.currentNotebook.id}"]`);
     if (notebookCard) {
-      notebookCard.querySelector(
-        ".stat-sources"
-      ).textContent = `${sources.length} 来源`;
-      notebookCard.querySelector(
-        ".stat-notes"
-      ).textContent = `${notes.length} 笔记`;
-=======
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => toast.remove(), 300);
-        }, 5000);
+        notebookCard.querySelector('.stat-sources').textContent = `${sources.length} 来源`;
+        notebookCard.querySelector('.stat-notes').textContent = `${notes.length} 笔记`;
     }
+  }
 
-    showError(message) {
-        this.setStatus(`错误: ${message}`);
-        this.showToast(message, 'error');
-    }
+  showError(message) {
+      this.setStatus(`错误: ${message}`);
+      this.showToast(message, 'error');
+  }
 
-    showWarn(message) {
-        this.showToast(message, 'warn');
-    }
+  showWarn(message) {
+      this.showToast(message, 'warn');
+  }
 
-    updateFooter() {
-        const sourceCount = document.querySelectorAll('.source-card').length;
-        const noteCount = document.querySelectorAll('.note-item').length;
-        document.getElementById('footerStats').textContent = `${sourceCount} 来源 · ${noteCount} 笔记`;
-    }
+  updateFooter() {
+      const sourceCount = document.querySelectorAll('.source-card').length;
+      const noteCount = document.querySelectorAll('.note-item').length;
+      document.getElementById('footerStats').textContent = `${sourceCount} 来源 · ${noteCount} 笔记`;
+  }
 
-    formatDate(dateString) {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diff = now - date;
+  formatDate(dateString) {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diff = now - date;
 
-        if (diff < 60000) return '刚刚';
-        if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
-        if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
+      if (diff < 60000) return '刚刚';
+      if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
 
-        return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' });
-    }
+      return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
 
-    async updateCurrentNotebookCounts() {
-        if (!this.currentNotebook) return;
+  // 通用 toast 提示方法
+  showToast(message, type = 'error') {
+      const colors = {
+          error: 'var(--accent-red)',
+          warn: 'var(--accent-orange)',
+          success: 'var(--accent-green)'
+      };
 
-        const [sources, notes] = await Promise.all([
-            this.api(`/notebooks/${this.currentNotebook.id}/sources`),
-            this.api(`/notebooks/${this.currentNotebook.id}/notes`)
-        ]);
+      const toast = document.createElement('div');
+      toast.className = `${type}-toast`;
+      toast.style.cssText = `
+          position: fixed; bottom: 60px; right: 20px; padding: 12px 20px;
+          background: ${colors[type]}; color: white; font-family: var(--font-mono);
+          font-size: 0.75rem; border-radius: 4px; box-shadow: var(--shadow-medium);
+          animation: slideIn 0.3s ease; z-index: 3000; white-space: pre-wrap; max-width: 400px;
+      `;
+      toast.textContent = message;
+      document.body.appendChild(toast);
 
-        const notebookCard = document.querySelector(`.notebook-card[data-id="${this.currentNotebook.id}"]`);
-        if (notebookCard) {
-            notebookCard.querySelector('.stat-sources').textContent = `${sources.length} 来源`;
-            notebookCard.querySelector('.stat-notes').textContent = `${notes.length} 笔记`;
-        }
->>>>>>> origin/master
+      setTimeout(() => {
+          toast.style.opacity = '0';
+          setTimeout(() => toast.remove(), 300);
+      }, 5000);
+  }
     }
   }
 }

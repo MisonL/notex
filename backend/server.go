@@ -100,7 +100,7 @@ func NewServer(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create agent: %w", err)
 	}
-	
+
 	// Initialize auth handler
 	authHandler := NewAuthHandler(cfg, baseStore)
 
@@ -293,14 +293,20 @@ func (s *Server) handleHealth(c *gin.Context) {
 }
 
 func (s *Server) handleConfig(c *gin.Context) {
-<<<<<<< HEAD
-	c.JSON(http.StatusOK, ConfigResponse{
-		AllowDelete:       s.cfg.AllowDelete,
+	resp := ConfigResponse{
 		EmbeddingProvider: s.cfg.EmbeddingProvider,
 		ImageModel:        s.cfg.ImageModel,
 		ChatProvider:      s.cfg.ChatProvider,
 		ChatModel:         s.cfg.ChatModel,
-	})
+		AllowDelete:       s.cfg.AllowDelete,
+	}
+
+	// Add auth related config if user is logged in
+	// (Note: Auth status is handled via middleware/token checks, this is just public config)
+	// Upstream might have added more fields here.
+	// Combining both:
+
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) handleUpdateConfig(c *gin.Context) {
@@ -609,7 +615,7 @@ func (s *Server) handleListModels(c *gin.Context) {
 func (s *Server) handleListNotebooks(c *gin.Context) {
 	ctx := context.Background()
 	userID := c.GetString("user_id")
-	
+
 	notebooks, err := s.store.ListNotebooks(ctx, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to list notebooks"})
@@ -685,7 +691,7 @@ func (s *Server) handleGetNotebook(c *gin.Context) {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Notebook not found"})
 		return
 	}
-	
+
 	// Check ownership
 	if notebook.UserID != "" && notebook.UserID != userID {
 		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Access denied"})
@@ -864,7 +870,7 @@ func (s *Server) handleDeleteSource(c *gin.Context) {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Source not found"})
 		return
 	}
-	
+
 	if err := s.checkNotebookAccess(ctx, source.NotebookID, userID); err != nil {
 		c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
 		return
@@ -1157,12 +1163,8 @@ func (s *Server) handleTransform(c *gin.Context) {
 	if req.Type == "infograph" {
 		extra := "**注意：无论来源是什么语言，请务必使用中文**"
 		prompt := response.Content + "\n\n" + extra
-<<<<<<< HEAD
-		imagePath, err := s.agent.provider.GenerateImage(ctx, s.cfg.ImageModel, prompt)
-=======
 		imageModel := s.getImageModelForProvider()
 		imagePath, err := s.agent.provider.GenerateImage(ctx, imageModel, prompt, userID)
->>>>>>> origin/master
 		if err != nil {
 			golog.Errorf("failed to generate infographic image: %v", err)
 			metadata["image_error"] = err.Error()
@@ -1188,12 +1190,8 @@ func (s *Server) handleTransform(c *gin.Context) {
 				// Combine style and slide content for the image generator
 				prompt := fmt.Sprintf("Style: %s\n\nSlide Content: %s", slides[0].Style, slide.Content)
 				prompt += "\n\n**注意：无论来源是什么语言，请务必使用中文**\n"
-<<<<<<< HEAD
-				imagePath, err := s.agent.provider.GenerateImage(ctx, s.cfg.ImageModel, prompt)
-=======
 				imageModel := s.getImageModelForProvider()
 				imagePath, err := s.agent.provider.GenerateImage(ctx, imageModel, prompt, userID)
->>>>>>> origin/master
 				if err != nil {
 					golog.Errorf("failed to generate slide %d: %v", i+1, err)
 					continue

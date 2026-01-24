@@ -1037,7 +1037,6 @@
             <h3>设置</h3>
             <button class="btn-close" id="btnCloseSettingsModal">×</button>
         </div>
-<<<<<<< HEAD
         <form class="modal-body" id="settingsForm">
             <div class="form-group">
                 <label class="input-label">聊天渠道 (Chat Channel)</label>
@@ -1094,44 +1093,43 @@
                 <button type="submit" class="btn-primary">保存设置</button>
             </div>
         </form>
-=======
+    </div>
 
-        <!-- Share Notebook Modal -->
-        <div class="modal" id="shareModal">
-            <div class="modal-header">
-                <h3>分享笔记本</h3>
-                <button class="btn-close" id="btnCloseShareModal">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="share-content">
-                    <p id="shareNotebookName" class="share-notebook-name"></p>
+    <!-- Share Notebook Modal (Upstream) -->
+    <div class="modal" id="shareModal">
+        <div class="modal-header">
+            <h3>分享笔记本</h3>
+            <button class="btn-close" id="btnCloseShareModal">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="share-content">
+                <p id="shareNotebookName" class="share-notebook-name"></p>
 
-                    <div class="share-status" id="shareStatus">
-                        <div class="status-icon" id="shareStatusIcon"></div>
-                        <span id="shareStatusText"></span>
+                <div class="share-status" id="shareStatus">
+                    <div class="status-icon" id="shareStatusIcon"></div>
+                    <span id="shareStatusText"></span>
+                </div>
+
+                <div class="share-link-section" id="shareLinkSection">
+                    <label class="input-label">公开链接</label>
+                    <div class="share-link-wrapper">
+                        <input type="text" class="input-field font-mono share-link-input" id="shareLinkInput" readonly>
+                        <button class="btn-copy-link" id="btnCopyLink" title="复制链接">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="7" width="10" height="8" rx="1"/>
+                                <path d="M7 7V5a3 3 0 0 1 6 0v2"/>
+                            </svg>
+                        </button>
                     </div>
+                </div>
 
-                    <div class="share-link-section" id="shareLinkSection">
-                        <label class="input-label">公开链接</label>
-                        <div class="share-link-wrapper">
-                            <input type="text" class="input-field font-mono share-link-input" id="shareLinkInput" readonly>
-                            <button class="btn-copy-link" id="btnCopyLink" title="复制链接">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="7" width="10" height="8" rx="1"/>
-                                    <path d="M7 7V5a3 3 0 0 1 6 0v2"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="share-actions">
-                        <button type="button" class="btn-secondary" id="btnCancelShare">关闭</button>
-                        <button type="button" class="btn-primary" id="btnToggleShare">公开笔记本</button>
-                    </div>
+                <div class="share-actions">
+                    <button type="button" class="btn-secondary" id="btnCancelShare">关闭</button>
+                    <button type="button" class="btn-primary" id="btnToggleShare">公开笔记本</button>
                 </div>
             </div>
         </div>
->>>>>>> origin/master
+    </div>
     </div>
 
     <!-- Loading Overlay -->
@@ -1142,28 +1140,6 @@
 
     <!-- Templates -->
     <template id="notebookCardTemplate">
-<<<<<<< HEAD
-      <div class="notebook-card" data-id="">
-        <div class="notebook-card-content">
-          <div class="notebook-card-icon">
-            <svg
-              viewBox="0 0 40 40"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <rect x="8" y="8" width="24" height="24" rx="2" />
-              <line x1="14" y1="16" x2="26" y2="16" />
-              <line x1="14" y1="22" x2="22" y2="22" />
-            </svg>
-          </div>
-          <h3 class="notebook-card-name"></h3>
-          <p class="notebook-card-desc"></p>
-          <div class="notebook-card-stats">
-            <span class="stat-sources">0 来源</span>
-            <span class="stat-notes">0 笔记</span>
-          </div>
-=======
         <div class="notebook-card" data-id="">
             <div class="notebook-card-content">
                 <div class="notebook-card-icon">
@@ -1195,7 +1171,6 @@
                     <path d="M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5"/>
                 </svg>
             </button>
->>>>>>> origin/master
         </div>
         <button class="btn-delete-card" title="删除">
           <svg
@@ -1216,24 +1191,6 @@
     </template>
 
     <template id="notebookTemplate">
-<<<<<<< HEAD
-      <div class="notebook-item" data-id="">
-        <div class="notebook-header">
-          <svg
-            class="notebook-icon"
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          >
-            <rect x="2" y="2" width="12" height="12" rx="1" />
-            <line x1="5" y1="5" x2="11" y2="5" />
-            <line x1="5" y1="7" x2="9" y2="7" />
-          </svg>
-          <span class="notebook-name"></span>
-=======
         <div class="notebook-item" data-id="">
             <div class="notebook-header">
                 <svg class="notebook-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1252,7 +1209,6 @@
                     <path d="M4.5 4.5L9.5 9.5M9.5 4.5L4.5 9.5"/>
                 </svg>
             </button>
->>>>>>> origin/master
         </div>
         <div class="notebook-meta">
           <span class="notebook-sources">0 来源</span>
@@ -1293,15 +1249,6 @@
     </template>
 
     <template id="noteTemplate">
-<<<<<<< HEAD
-      <div class="note-item" data-id="">
-        <div class="note-type-badge"></div>
-        <h4 class="note-title"></h4>
-        <div class="note-preview"></div>
-        <div class="note-meta">
-          <span class="note-date"></span>
-          <span class="note-sources"></span>
-=======
         <div class="note-item" data-id="">
             <div class="note-type-badge"></div>
             <h4 class="note-title"></h4>
@@ -1315,7 +1262,6 @@
                     <path d="M4.5 4.5L9.5 9.5M9.5 4.5L4.5 9.5"/>
                 </svg>
             </button>
->>>>>>> origin/master
         </div>
         <button class="btn-delete-note" title="删除笔记">
           <svg

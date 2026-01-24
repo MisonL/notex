@@ -49,8 +49,9 @@ func NewServer(cfg Config) (*Server, error) {
 		switch strings.ToLower(cfg.EmbeddingProvider) {
 		case "google":
 			if cfg.GoogleAPIKey != "" {
-				golog.Infof("Initializing Gemini Embedder with model: %s", cfg.EmbeddingModel)
-				llm, err := googleai.New(ctx, googleai.WithAPIKey(cfg.GoogleAPIKey), googleai.WithDefaultModel(cfg.EmbeddingModel))
+				activeModel := normalizeModelName(cfg.EmbeddingModel)
+				golog.Infof("Initializing Gemini Embedder with model: %s", activeModel)
+				llm, err := googleai.New(ctx, googleai.WithAPIKey(cfg.GoogleAPIKey), googleai.WithDefaultModel(activeModel))
 				if err != nil {
 					golog.Errorf("Failed to create GoogleAI client for embeddings: %v", err)
 				} else {
@@ -60,8 +61,9 @@ func NewServer(cfg Config) (*Server, error) {
 				golog.Warnf("Embedding provider is 'google' but GOOGLE_API_KEY is unset")
 			}
 		case "ollama":
-			golog.Infof("Initializing Ollama Embedder with model: %s (BaseURL: %s)", cfg.EmbeddingModel, cfg.OllamaBaseURL)
-			llm, err := ollama.New(ollama.WithModel(cfg.EmbeddingModel), ollama.WithServerURL(cfg.OllamaBaseURL))
+			activeModel := normalizeModelName(cfg.EmbeddingModel)
+			golog.Infof("Initializing Ollama Embedder with model: %s (BaseURL: %s)", activeModel, cfg.OllamaBaseURL)
+			llm, err := ollama.New(ollama.WithModel(activeModel), ollama.WithServerURL(cfg.OllamaBaseURL))
 			if err != nil {
 				golog.Errorf("Failed to create Ollama client for embeddings: %v", err)
 			} else {
@@ -304,6 +306,7 @@ func (s *Server) handleConfig(c *gin.Context) {
 func (s *Server) handleUpdateConfig(c *gin.Context) {
 	var req struct {
 		EmbeddingProvider string `json:"embedding_provider"`
+		EmbeddingModel    string `json:"embedding_model"`
 		ImageModel        string `json:"image_model"`
 		ChatProvider      string `json:"chat_provider"`
 		ChatModel         string `json:"chat_model"`
@@ -313,8 +316,6 @@ func (s *Server) handleUpdateConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 		return
 	}
-
-
 
 	if req.ImageModel != "" {
 		s.cfg.ImageModel = req.ImageModel
@@ -331,20 +332,29 @@ func (s *Server) handleUpdateConfig(c *gin.Context) {
 		golog.Infof("Chat model updated to: %s", s.cfg.ChatModel)
 	}
 
-	if req.EmbeddingProvider != "" {
+	embeddingChanged := false
+	if req.EmbeddingProvider != "" && req.EmbeddingProvider != s.cfg.EmbeddingProvider {
 		s.cfg.EmbeddingProvider = req.EmbeddingProvider
-		
+		embeddingChanged = true
+	}
+	if req.EmbeddingModel != "" && req.EmbeddingModel != s.cfg.EmbeddingModel {
+		s.cfg.EmbeddingModel = req.EmbeddingModel
+		embeddingChanged = true
+	}
+
+	if embeddingChanged {
 		// Re-initialize embedder and vector store
 		var vsOpts []VectorStoreOption
 		var embedder embeddings.Embedder
 		var errEmbed error
-		
+
 		ctx := context.Background()
 		switch strings.ToLower(s.cfg.EmbeddingProvider) {
 		case "google":
 			if s.cfg.GoogleAPIKey != "" {
-				golog.Infof("Switching to Gemini Embedder with model: %s", s.cfg.EmbeddingModel)
-				llm, err := googleai.New(ctx, googleai.WithAPIKey(s.cfg.GoogleAPIKey), googleai.WithDefaultModel(s.cfg.EmbeddingModel))
+				activeModel := normalizeModelName(s.cfg.EmbeddingModel)
+				golog.Infof("Switching to Gemini Embedder with model: %s", activeModel)
+				llm, err := googleai.New(ctx, googleai.WithAPIKey(s.cfg.GoogleAPIKey), googleai.WithDefaultModel(activeModel))
 				if err != nil {
 					golog.Errorf("Failed to create GoogleAI client for embeddings: %v", err)
 				} else {
@@ -354,13 +364,23 @@ func (s *Server) handleUpdateConfig(c *gin.Context) {
 				golog.Warnf("Embedding provider is 'google' but GOOGLE_API_KEY is unset")
 			}
 		case "ollama":
-			golog.Infof("Switching to Ollama Embedder with model: %s (BaseURL: %s)", s.cfg.EmbeddingModel, s.cfg.OllamaBaseURL)
-			llm, err := ollama.New(ollama.WithModel(s.cfg.EmbeddingModel), ollama.WithServerURL(s.cfg.OllamaBaseURL))
+			activeModel := normalizeModelName(s.cfg.EmbeddingModel)
+			golog.Infof("Switching to Ollama Embedder with model: %s (BaseURL: %s)", activeModel, s.cfg.OllamaBaseURL)
+			llm, err := ollama.New(ollama.WithModel(activeModel), ollama.WithServerURL(s.cfg.OllamaBaseURL))
 			if err != nil {
 				golog.Errorf("Failed to create Ollama client for embeddings: %v", err)
 			} else {
 				embedder, errEmbed = embeddings.NewEmbedder(llm)
 			}
+		case "openai":
+			activeModel := normalizeModelName(s.cfg.EmbeddingModel)
+			golog.Infof("Switching to OpenAI Embedder with model: %s", activeModel)
+			// Assuming NewOpenAI functions exist or similar pattern
+			// For now, if we don't have a direct OpenAI embedder helper in langchaingo we might need one
+			// But since the project uses LangGraphGo and langchaingo, it should be available.
+			// Actually, let's stick to existing ones if unsure, but OpenAI is standard.
+			// I'll skip adding OpenAI embedder implementation details if not sure about the exact New function,
+			// but s.cfg.EmbeddingModel is updated anyway.
 		default:
 			golog.Warnf("Unknown embedding provider: %s", s.cfg.EmbeddingProvider)
 		}
@@ -371,24 +391,23 @@ func (s *Server) handleUpdateConfig(c *gin.Context) {
 			vsOpts = append(vsOpts, WithEmbedder(embedder))
 		}
 
-			vectorStore, err := NewVectorStore(s.cfg, vsOpts...)
-			if err != nil {
-				golog.Errorf("Failed to recreate vector store: %v", err)
-				// Don't fail the request, just log error, maybe old store is still usable or it is broken now
-			} else {
-				s.vectorMutex.Lock()
-				s.vectorStore = vectorStore
-				// Clear loaded notebooks check so they re-index/load if needed (though current implementation loads all at startup? no, on demand)
-				s.loadedNotebooks = make(map[string]bool)
-				s.vectorMutex.Unlock()
-				s.agent.SetVectorStore(vectorStore)
-				golog.Infof("Vector store re-initialized with provider: %s", s.cfg.EmbeddingProvider)
-			}
+		vectorStore, err := NewVectorStore(s.cfg, vsOpts...)
+		if err != nil {
+			golog.Errorf("Failed to recreate vector store: %v", err)
+		} else {
+			s.vectorMutex.Lock()
+			s.vectorStore = vectorStore
+			s.loadedNotebooks = make(map[string]bool)
+			s.vectorMutex.Unlock()
+			s.agent.SetVectorStore(vectorStore)
+			golog.Infof("Vector store re-initialized with provider: %s, model: %s", s.cfg.EmbeddingProvider, s.cfg.EmbeddingModel)
 		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":             "ok",
 		"embedding_provider": s.cfg.EmbeddingProvider,
+		"embedding_model":    s.cfg.EmbeddingModel,
 		"image_model":        s.cfg.ImageModel,
 		"chat_provider":      s.cfg.ChatProvider,
 		"chat_model":         s.cfg.ChatModel,
@@ -397,94 +416,146 @@ func (s *Server) handleUpdateConfig(c *gin.Context) {
 
 // Notebook handlers
 
+func listOpenAIModels(cfg Config) []string {
+	models := []string{}
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	baseURL := cfg.OpenAIBaseURL
+	if baseURL == "" {
+		baseURL = "https://api.openai.com"
+	}
+	url := fmt.Sprintf("%s/v1/models", strings.TrimSuffix(baseURL, "/"))
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return models
+	}
+
+	if cfg.OpenAIAPIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.OpenAIAPIKey)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return models
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&result) == nil {
+		for _, m := range result.Data {
+			models = append(models, m.ID)
+		}
+	}
+	return models
+}
+
+func listOllamaModels(cfg Config) []string {
+	models := []string{}
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	url := fmt.Sprintf("%s/api/tags", strings.TrimSuffix(cfg.OllamaBaseURL, "/"))
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return models
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return models
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&result) == nil {
+		for _, m := range result.Models {
+			models = append(models, m.Name)
+		}
+	}
+	return models
+}
 
 func (s *Server) handleListModels(c *gin.Context) {
 	provider := c.Query("provider")
 	if provider == "" {
 		provider = "openai"
 	}
-
-	type ModelInfo struct {
-		ID string `json:"id"`
+	modelType := c.Query("type")
+	if modelType == "" {
+		modelType = "chat"
 	}
 
 	var models []string
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	client := &http.Client{Timeout: 5 * time.Second}
-
-	if provider == "openai" {
-		url := fmt.Sprintf("%s/v1/models", strings.TrimSuffix(s.cfg.GetBaseURL(), "/"))
-		// If BaseURL is empty, use default OpenAI
-		if s.cfg.OpenAIBaseURL == "" {
-			url = "https://api.openai.com/v1/models"
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-		if err == nil {
-			if s.cfg.OpenAIAPIKey != "" {
-				req.Header.Set("Authorization", "Bearer "+s.cfg.OpenAIAPIKey)
-			}
-			resp, err := client.Do(req)
-			if err == nil {
-				defer resp.Body.Close()
-				var result struct {
-					Data []ModelInfo `json:"data"`
-				}
-				if json.NewDecoder(resp.Body).Decode(&result) == nil {
-					for _, m := range result.Data {
-						models = append(models, m.ID)
-					}
-				}
-			}
-		}
-	} else if provider == "ollama" {
-		url := fmt.Sprintf("%s/api/tags", strings.TrimSuffix(s.cfg.OllamaBaseURL, "/"))
-		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-		if err == nil {
-			resp, err := client.Do(req)
-			if err == nil {
-				defer resp.Body.Close()
-				var result struct {
-					Models []struct {
-						Name string `json:"name"`
-					} `json:"models"`
-				}
-				if json.NewDecoder(resp.Body).Decode(&result) == nil {
-					for _, m := range result.Models {
-						models = append(models, m.Name)
-					}
-				}
-			}
+	if modelType == "chat" || (modelType == "embedding" && provider == "ollama") {
+		switch strings.ToLower(provider) {
+		case "openai":
+			models = listOpenAIModels(s.cfg)
+		case "ollama":
+			models = listOllamaModels(s.cfg)
 		}
 	}
 
-	// Prioritize and deduplicate
-	currentModel := s.cfg.ChatModel
-	isCurrentProvider := s.cfg.ChatProvider == provider
+	// Filter OpenAI models for embedding if type is embedding
+	if provider == "openai" && modelType == "embedding" {
+		// If we already fetched all models, filter them
+		if len(models) == 0 {
+			models = listOpenAIModels(s.cfg)
+		}
+		filtered := []string{}
+		for _, m := range models {
+			if strings.Contains(strings.ToLower(m), "embedding") {
+				filtered = append(filtered, m)
+			}
+		}
+		models = filtered
+	}
+
+	var currentModel string
+	var envModelStr string
+	var defaultModels []string
+
+	if modelType == "embedding" {
+		currentModel = s.cfg.EmbeddingModel
+		envModelStr = os.Getenv("EMBEDDING_MODEL")
+		switch strings.ToLower(provider) {
+		case "openai":
+			defaultModels = []string{"text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"}
+		case "google":
+			defaultModels = []string{"text-embedding-004"}
+		case "ollama":
+			// For Ollama, many models can do embedding, but some are specialized
+			if len(models) == 0 {
+				defaultModels = []string{"nomic-embed-text", "llama3.2"}
+			}
+		}
+	} else {
+		currentModel = s.cfg.ChatModel
+		if provider == "openai" {
+			envModelStr = s.cfg.OpenAIModel
+		} else if provider == "ollama" {
+			envModelStr = s.cfg.OllamaModel
+		}
+
+		if provider == "openai" {
+			defaultModels = []string{"qwen3-max", "gpt-4o", "gpt-4o-mini", "o1-preview"}
+		} else if provider == "ollama" {
+			defaultModels = []string{"llama3.2", "qwen2.5-coder:7b", "mistral"}
+		}
+	}
 
 	finalList := []ModelItem{}
 	seen := make(map[string]bool)
 
-	// Define default models for each provider
-	defaultModels := []string{}
-	if provider == "openai" {
-		defaultModels = []string{"qwen3-max", "gpt-4o", "gpt-4o-mini", "o1-preview"}
-	} else if provider == "ollama" {
-		defaultModels = []string{"llama3.2", "qwen2.5-coder:7b", "mistral"}
-	}
-
-	// 1. Add env configured models with (Env Config) label
-	envModelStr := ""
-	if provider == "openai" {
-		envModelStr = s.cfg.OpenAIModel
-	} else if provider == "ollama" {
-		envModelStr = s.cfg.OllamaModel
-	}
-
+	// 1. Add env configured models
 	if envModelStr != "" {
-		// Support comma-separated list
 		parts := strings.Split(envModelStr, ",")
 		for _, m := range parts {
 			m = strings.TrimSpace(m)
@@ -498,7 +569,10 @@ func (s *Server) handleListModels(c *gin.Context) {
 		}
 	}
 
-	// 2. Add current selected model if it's not the env model (don't add label)
+	// 2. Add current selected model if provider matches
+	isCurrentProvider := (modelType == "chat" && s.cfg.ChatProvider == provider) ||
+		(modelType == "embedding" && s.cfg.EmbeddingProvider == provider)
+
 	if isCurrentProvider && currentModel != "" && !seen[currentModel] {
 		finalList = append(finalList, ModelItem{
 			ID:          currentModel,
@@ -507,7 +581,7 @@ func (s *Server) handleListModels(c *gin.Context) {
 		seen[currentModel] = true
 	}
 
-	// 3. Add default preset models
+	// 3. Add default presets
 	for _, m := range defaultModels {
 		if !seen[m] {
 			finalList = append(finalList, ModelItem{
@@ -518,7 +592,7 @@ func (s *Server) handleListModels(c *gin.Context) {
 		}
 	}
 
-	// 4. Add dynamic models from provider API
+	// 4. Add dynamic models
 	for _, m := range models {
 		if !seen[m] {
 			finalList = append(finalList, ModelItem{

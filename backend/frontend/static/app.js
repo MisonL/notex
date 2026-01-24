@@ -426,6 +426,10 @@ class OpenNotebook {
     if (chatProviderSelect) {
       chatProviderSelect.addEventListener('change', () => this.updateChatModelVisibility());
     }
+    const embeddingProviderSelect = document.getElementById('embeddingProviderSelect');
+    if (embeddingProviderSelect) {
+      embeddingProviderSelect.addEventListener('change', () => this.updateEmbeddingModelVisibility());
+    }
   }
 
   async updateChatModelVisibility() {
@@ -442,24 +446,39 @@ class OpenNotebook {
     }
     
     // Refresh models for the selected provider
-    await this.loadModels(provider);
+    await this.loadModels(provider, 'chat');
   }
 
-  async loadModels(provider) {
-    const selectId = provider === 'openai' ? 'chatModelOpenAI' : 'chatModelOllama';
+  async updateEmbeddingModelVisibility() {
+    const provider = document.getElementById('embeddingProviderSelect').value;
+    // Embedding dropdown is single for now, but we'll fetch based on provider
+    await this.loadModels(provider, 'embedding');
+  }
+
+  async loadModels(provider, type = 'chat') {
+    let selectId;
+    if (type === 'chat') {
+        selectId = provider === 'openai' ? 'chatModelOpenAI' : 'chatModelOllama';
+    } else {
+        selectId = 'embeddingModelSelect';
+    }
     const select = document.getElementById(selectId);
     if (!select) return;
 
+    // Use specific config field based on type
+    const configModel = type === 'chat' ? this.config.chatModel : (this.config.embeddingModel || '');
+    const configProvider = type === 'chat' ? this.config.chatProvider : (this.config.embeddingProvider || '');
+
     // Preserve current selection if possible, or use config
-    const currentVal = select.value || (this.config.chatProvider === provider ? this.config.chatModel : '');
+    const currentVal = select.value || (configProvider === provider ? configModel : '');
 
     // Show loading if empty
-    if (select.options.length === 0) {
+    if (select.options.length === 0 || select.innerHTML.includes('Failed')) {
        select.innerHTML = '<option value="">Loading...</option>';
     }
 
     try {
-        const res = await this.api(`/models?provider=${provider}`);
+        const res = await this.api(`/models?provider=${provider}&type=${type}`);
         const models = res.models || [];
 =======
     // Check if URL contains /public/:token and load the public notebook
@@ -750,6 +769,7 @@ class OpenNotebook {
             });
         });
 
+<<<<<<< Updated upstream
         safeAddEventListener('btnCustomTransform', 'click', (e) => {
             this.handleTransform('custom', e.currentTarget);
         });
@@ -783,6 +803,23 @@ class OpenNotebook {
         if (!this.token) {
             this.updateAuthUI();
             return;
+=======
+        // If configured model is in list, select it
+        if (foundCurrent) {
+            select.value = currentVal;
+        } else if (configProvider === provider && configModel) {
+             const exists = models.some(m => {
+                  const id = typeof m === 'string' ? m : m.id;
+                  return id === configModel;
+             });
+             if (!exists) {
+                  const opt = document.createElement('option');
+                  opt.value = configModel;
+                  opt.textContent = configModel;
+                  select.insertBefore(opt, select.firstChild);
+                  select.value = configModel;
+             }
+>>>>>>> Stashed changes
         }
 
         try {
@@ -1854,6 +1891,8 @@ class OpenNotebook {
     
     // Set appropriate chat model based on provider (and load models)
     await this.updateChatModelVisibility();
+    // Load embedding models
+    await this.updateEmbeddingModelVisibility();
     
     modal.classList.add('active');
     document.getElementById('modalOverlay').classList.add('active');
@@ -1864,6 +1903,7 @@ class OpenNotebook {
     const form = e.target;
     const data = new FormData(form);
     const provider = data.get('embedding_provider');
+    const embeddingModel = data.get('embedding_model');
     const imageModel = data.get('image_model');
     const chatProvider = data.get('chat_provider');
     const chatModel = chatProvider === 'openai' ? data.get('chat_model_openai') : data.get('chat_model_ollama');
@@ -1875,6 +1915,7 @@ class OpenNotebook {
         method: 'POST',
         body: JSON.stringify({
           embedding_provider: provider,
+          embedding_model: embeddingModel,
           image_model: imageModel,
           chat_provider: chatProvider,
           chat_model: chatModel
@@ -1882,6 +1923,7 @@ class OpenNotebook {
       });
 
       this.config.embeddingProvider = res.embedding_provider;
+      this.config.embeddingModel = res.embedding_model;
       this.config.imageModel = res.image_model;
       this.config.chatProvider = res.chat_provider;
       this.config.chatModel = res.chat_model;
@@ -2982,7 +3024,6 @@ class OpenNotebook {
     }
   }
 
-<<<<<<< HEAD
   // 聊天方法
   async loadChatSessions() {
     if (!this.currentNotebook) return;
@@ -2991,174 +3032,6 @@ class OpenNotebook {
       await this.api(`/notebooks/${this.currentNotebook.id}/chat/sessions`);
       const container = document.getElementById("chatMessages");
       container.innerHTML = `
-=======
-    async deleteNote(id) {
-        // Immediately remove from UI
-        const noteCard = document.querySelector(`.compact-note-card[data-note-id="${id}"]`);
-        if (noteCard) {
-            noteCard.remove();
-        }
-
-        // Also remove from notes list sidebar
-        const noteItem = document.querySelector(`.note-item[data-id="${id}"]`);
-        if (noteItem) {
-            noteItem.remove();
-        }
-
-        try {
-            await this.api(`/notebooks/${this.currentNotebook.id}/notes/${id}`, {
-                method: 'DELETE',
-            });
-            await this.loadNotes();
-            await this.updateCurrentNotebookCounts();
-
-            // If notes_list tab is active or visible, refresh it
-            const tabBtnNotesList = document.getElementById('tabBtnNotesList');
-            if (tabBtnNotesList && !tabBtnNotesList.classList.contains('hidden')) {
-                this.renderNotesCompactGrid();
-            }
-        } catch (error) {
-            this.showError('删除笔记失败');
-            // Reload to restore if deletion failed
-            await this.loadNotes();
-            this.renderNotesCompactGrid();
-        }
-    }
-
-    // 转换方法
-    async handleTransform(type, element) {
-        if (!this.currentNotebook) {
-            this.showError('请先选择一个笔记本');
-            return;
-        }
-
-        // 洞察按钮：在新窗口打开 insight.rpcx.io
-        if (type === 'insight') {
-            window.open('https://insight.rpcx.io', '_blank');
-            return;
-        }
-
-        const sources = await this.api(`/notebooks/${this.currentNotebook.id}/sources`);
-        if (sources.length === 0) {
-            this.showError('请先添加来源');
-            return;
-        }
-
-        const customPrompt = document.getElementById('customPrompt').value;
-        const typeName = this.noteTypeNameMap[type] || '内容';
-
-        // 1. 开始动画
-        if (element) {
-            element.classList.add('loading');
-        }
-
-        // 2. 添加占位笔记
-        const notesContainer = document.getElementById('notesList');
-        const template = document.getElementById('noteTemplate');
-        const placeholder = template.content.cloneNode(true).querySelector('.note-item');
-        
-        placeholder.classList.add('placeholder');
-        placeholder.querySelector('.note-title').textContent = `正在生成${typeName}...`;
-        placeholder.querySelector('.note-preview').textContent = 'AI 正在分析您的来源并撰写笔记，请稍候...';
-        placeholder.querySelector('.note-date').textContent = '刚刚';
-        placeholder.querySelector('.note-type-badge').textContent = type.toUpperCase();
-        
-        // 占位符暂不显示删除按钮
-        const delBtn = placeholder.querySelector('.btn-delete-note');
-        if (delBtn) delBtn.style.display = 'none';
-        
-        // 如果有“暂无笔记”状态，先清空
-        const emptyState = notesContainer.querySelector('.empty-state');
-        if (emptyState) emptyState.remove();
-        
-        notesContainer.prepend(placeholder);
-        placeholder.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-        try {
-            const sourceIds = sources.map(s => s.id);
-            const note = await this.api(`/notebooks/${this.currentNotebook.id}/transform`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    type: type,
-                    prompt: customPrompt || undefined,
-                    source_ids: sourceIds,
-                    length: 'medium',
-                    format: 'markdown',
-                }),
-            });
-
-            // 3. 停止动画并更新占位符
-            if (element) element.classList.remove('loading');
-
-            // 替换占位符内容
-            placeholder.classList.remove('placeholder');
-            placeholder.dataset.id = note.id;
-            placeholder.querySelector('.note-title').textContent = note.title;
-            
-            const plainText = note.content
-                .replace(/^#+\s+/gm, '')
-                .replace(/\*\*/g, '')
-                .replace(/\*/g, '')
-                .replace(/`/g, '')
-                .replace(/\ \[([^\]]+)\]\([^)]+\)/g, '$1')
-                .replace(/\n+/g, ' ')
-                .trim();
-            
-            placeholder.querySelector('.note-preview').textContent = plainText;
-            placeholder.querySelector('.note-sources').textContent = `${note.source_ids?.length || 0} 来源`;
-
-            // 恢复删除按钮并绑定事件
-            if (delBtn) {
-                delBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.deleteNote(note.id);
-                });
-            }
-
-            // 绑定查看事件
-            placeholder.addEventListener('click', (e) => {
-                if (!e.target.closest('.btn-delete-note')) {
-                    this.viewNote(note);
-                }
-            });
-
-            await this.updateCurrentNotebookCounts();
-            this.updateFooter();
-            document.getElementById('customPrompt').value = '';
-
-            // 检查信息图生成是否失败
-            if (type === 'infograph' && note.metadata?.image_error) {
-                this.showWarn(`信息图图片生成失败: ${note.metadata.image_error}\n\n生成的 prompt 可在笔记中查看`);
-            } else {
-                this.setStatus(`成功生成 ${typeName}`);
-            }
-
-            // If type is insight, refresh sources list to show the injected insight report
-            if (type === 'insight') {
-                await this.loadSources();
-            }
-
-            // If notes_list tab is active or visible, refresh it
-            const tabBtnNotesList = document.getElementById('tabBtnNotesList');
-            if (tabBtnNotesList && !tabBtnNotesList.classList.contains('hidden')) {
-                this.renderNotesCompactGrid();
-            }
-        } catch (error) {
-            if (element) element.classList.remove('loading');
-            placeholder.remove(); // 失败则移除占位符
-            this.showError(error.message);
-        }
-    }
-
-    // 聊天方法
-    async loadChatSessions() {
-        if (!this.currentNotebook) return;
-
-        try {
-            await this.api(`/notebooks/${this.currentNotebook.id}/chat/sessions`);
-            const container = document.getElementById('chatMessages');
-            container.innerHTML = `
->>>>>>> origin/master
                 <div class="chat-welcome">
                     <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5">
                         <circle cx="20" cy="12" r="6"/>
@@ -3293,6 +3166,13 @@ class OpenNotebook {
       });
     }
 
+    // Render MathJax for the new message if available
+    if (window.MathJax && window.MathJax.typesetPromise && role === 'assistant') {
+        MathJax.typesetPromise([messageText]).catch(err => {
+            console.warn('MathJax rendering error:', err);
+        });
+    }
+
     container.appendChild(clone);
     container.scrollTop = container.scrollHeight;
   }
@@ -3322,78 +3202,17 @@ class OpenNotebook {
   showError(message) {
     this.setStatus(`错误: ${message}`);
 
-<<<<<<< HEAD
     const toast = document.createElement("div");
     toast.className = "error-toast";
     toast.style.cssText = `
-=======
-        container.appendChild(clone);
-
-        // Render MathJax for the new message if available
-        if (window.MathJax && window.MathJax.typesetPromise && role === 'assistant') {
-            MathJax.typesetPromise([messageText]).catch(err => {
-                console.warn('MathJax rendering error:', err);
-            });
-        }
-
-        container.scrollTop = container.scrollHeight;
-    }
-
-    // UI 方法
-    closeModals() {
-        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-        document.getElementById('modalOverlay').classList.remove('active');
-        this.hideLoading();
-    }
-
-    showLoading(text) {
-        document.getElementById('loadingText').textContent = text || '处理中...';
-        document.getElementById('loadingOverlay').classList.add('active');
-    }
-
-    hideLoading() {
-        document.getElementById('loadingOverlay').classList.remove('active');
-    }
-
-    setStatus(text) {
-        document.getElementById('footerStatus').textContent = text;
-    }
-
-    // 工具方法：转义 HTML 特殊字符
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    // Rewrite image URLs for public notebooks
-    // No longer needed - backend handles access control based on notebook public status
-    rewriteImageUrlsForPublic(content) {
-        // Keep original URLs - backend will handle access control
-        return content;
-    }
-
-    // 通用 toast 提示方法
-    showToast(message, type = 'error') {
-        const colors = {
-            error: 'var(--accent-red)',
-            warn: 'var(--accent-orange)',
-            success: 'var(--accent-green)'
-        };
-
-        const toast = document.createElement('div');
-        toast.className = `${type}-toast`;
-        toast.style.cssText = `
->>>>>>> origin/master
             position: fixed; bottom: 60px; right: 20px; padding: 12px 20px;
-            background: ${colors[type]}; color: white; font-family: var(--font-mono);
+            background: var(--accent-red); color: white; font-family: var(--font-mono);
             font-size: 0.75rem; border-radius: 4px; box-shadow: var(--shadow-medium);
             animation: slideIn 0.3s ease; z-index: 3000; white-space: pre-wrap; max-width: 400px;
         `;
     toast.textContent = message;
     document.body.appendChild(toast);
 
-<<<<<<< HEAD
     setTimeout(() => {
       toast.style.opacity = "0";
       setTimeout(() => toast.remove(), 300);

@@ -4,11 +4,13 @@ go 1.25.0
 
 require (
 	github.com/gin-gonic/gin v1.10.0
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/kataras/golog v0.1.15
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	github.com/tmc/langchaingo v0.1.14
+	golang.org/x/oauth2 v0.34.0
 	google.golang.org/genai v1.40.0
 	modernc.org/sqlite v1.42.2
 )
@@ -82,7 +84,6 @@ require (
 	golang.org/x/crypto v0.44.0 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.31.0 // indirect

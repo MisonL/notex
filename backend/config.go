@@ -25,42 +25,62 @@ type Config struct {
 	OllamaBaseURL     string
 	OllamaModel       string
 
-    // Chat settings (Configured for defaults)
-    ChatProvider      string
-    ChatModel         string
+	// Chat settings (Configured for defaults)
+	ChatProvider string
+	ChatModel    string
+
+	// Image generation settings
+	ImageProvider    string // "gemini", "glm", "zimage"
+	GLMAPIKey        string
+	GLMImageModel    string
+	GeminiImageModel string
+	ZImageAPIKey     string
+	ZImageModel      string
 
 	// Vector store settings
-	VectorStoreType    string // "memory", "supabase", "pgvector", "redis", "sqlite"
-	SupabaseURL        string
-	SupabaseKey        string
-	PostgreSQLURL      string
-	RedisURL           string
-	SQLitePath         string
+	VectorStoreType string // "memory", "supabase", "pgvector", "redis", "sqlite"
+	SupabaseURL     string
+	SupabaseKey     string
+	PostgreSQLURL   string
+	RedisURL        string
+	SQLitePath      string
 
 	// Store settings (for checkpoints)
-	StoreType          string // "memory", "sqlite", "postgres", "redis"
-	StorePath          string
+	StoreType string // "memory", "sqlite", "postgres", "redis"
+	StorePath string
 
 	// Application settings
-	MaxSources         int
-	MaxContextLength   int
-	ChunkSize          int
-	ChunkOverlap       int
+	MaxSources       int
+	MaxContextLength int
+	ChunkSize        int
+	ChunkOverlap     int
 
 	// Podcast generation
-	EnablePodcast      bool
-	PodcastVoice       string
+	EnablePodcast bool
+	PodcastVoice  string
 
 	// Document conversion
-	EnableMarkitdown   bool
+	EnableMarkitdown bool
 
 	// Demo settings
-	AllowDelete                      bool
-	AllowMultipleNotesOfSameType     bool
+	AllowMultipleNotesOfSameType bool
 
 	// LangSmith tracing (optional)
-	LangChainAPIKey    string
-	LangChainProject   string
+	LangChainAPIKey  string
+	LangChainProject string
+
+	// Auth settings
+	JWTSecret string
+
+	// GitHub OAuth
+	GithubClientID     string
+	GithubClientSecret string
+	GithubRedirectURL  string
+
+	// Google OAuth
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURL  string
 }
 
 // loadEnv loads .env file if it exists (ignoring errors if file not found)
@@ -78,11 +98,11 @@ func LoadConfig() Config {
 	loadEnv()
 
 	cfg := Config{
-		ServerHost:       getEnv("SERVER_HOST", "0.0.0.0"),
-		ServerPort:       getEnv("SERVER_PORT", "8080"),
-		OpenAIAPIKey:     getEnv("OPENAI_API_KEY", ""),
-		OpenAIBaseURL:    getEnv("OPENAI_BASE_URL", ""),
-		OpenAIModel:      getEnv("OPENAI_MODEL", "gpt-4o-mini"),
+		ServerHost:        getEnv("SERVER_HOST", "0.0.0.0"),
+		ServerPort:        getEnv("SERVER_PORT", "8080"),
+		OpenAIAPIKey:      getEnv("OPENAI_API_KEY", ""),
+		OpenAIBaseURL:     getEnv("OPENAI_BASE_URL", ""),
+		OpenAIModel:       getEnv("OPENAI_MODEL", "gpt-4o-mini"),
 		EmbeddingProvider: getEnv("EMBEDDING_PROVIDER", "google"),
 		EmbeddingModel:    getEnv("EMBEDDING_MODEL", "text-embedding-3-small"),
 		ImageModel:        getEnv("IMAGE_MODEL", "gemini-2.5-flash-image-preview"),
@@ -92,25 +112,40 @@ func LoadConfig() Config {
 		ChatProvider:      getEnv("CHAT_PROVIDER", "openai"),
 		ChatModel:         getEnv("CHAT_MODEL", "qwen3-max"),
 
-		VectorStoreType:  getEnv("VECTOR_STORE_TYPE", "sqlite"),
-		SupabaseURL:      getEnv("SUPABASE_URL", ""),
-		SupabaseKey:      getEnv("SUPABASE_KEY", ""),
-		PostgreSQLURL:    getEnv("POSTGRES_URL", ""),
-		RedisURL:         getEnv("REDIS_URL", "redis://localhost:6379"),
-		SQLitePath:       getEnv("SQLITE_PATH", "./data/vector.db"),
-		StoreType:        getEnv("STORE_TYPE", "sqlite"),
-		StorePath:        getEnv("STORE_PATH", "./data/checkpoints.db"),
-		MaxSources:       getEnvInt("MAX_SOURCES", 5),
-		MaxContextLength: getEnvInt("MAX_CONTEXT_LENGTH", 128000),
-		ChunkSize:        getEnvInt("CHUNK_SIZE", 1000),
-		ChunkOverlap:     getEnvInt("CHUNK_OVERLAP", 200),
-		EnablePodcast:    getEnvBool("ENABLE_PODCAST", true),
-		PodcastVoice:     getEnv("PODCAST_VOICE", "alloy"),
-		EnableMarkitdown:           getEnvBool("ENABLE_MARKITDOWN", true),
-		AllowDelete:                getEnvBool("ALLOW_DELETE", true),
+		ImageProvider:                getEnv("IMAGE_PROVIDER", "gemini"),
+		GLMAPIKey:                    getEnv("GLM_API_KEY", ""),
+		GLMImageModel:                getEnv("GLM_IMAGE_MODEL", "glm-image"),
+		GeminiImageModel:             getEnv("GEMINI_IMAGE_MODEL", "gemini-2.0-flash-exp"),
+		ZImageAPIKey:                 getEnv("ZIMAGE_API_KEY", ""),
+		ZImageModel:                  getEnv("ZIMAGE_MODEL", "z-image-turbo"),
+		VectorStoreType:              getEnv("VECTOR_STORE_TYPE", "sqlite"),
+		SupabaseURL:                  getEnv("SUPABASE_URL", ""),
+		SupabaseKey:                  getEnv("SUPABASE_KEY", ""),
+		PostgreSQLURL:                getEnv("POSTGRES_URL", ""),
+		RedisURL:                     getEnv("REDIS_URL", "redis://localhost:6379"),
+		SQLitePath:                   getEnv("SQLITE_PATH", "./data/vector.db"),
+		StoreType:                    getEnv("STORE_TYPE", "sqlite"),
+		StorePath:                    getEnv("STORE_PATH", "./data/checkpoints.db"),
+		MaxSources:                   getEnvInt("MAX_SOURCES", 5),
+		MaxContextLength:             getEnvInt("MAX_CONTEXT_LENGTH", 128000),
+		ChunkSize:                    getEnvInt("CHUNK_SIZE", 1000),
+		ChunkOverlap:                 getEnvInt("CHUNK_OVERLAP", 200),
+		EnablePodcast:                getEnvBool("ENABLE_PODCAST", true),
+		PodcastVoice:                 getEnv("PODCAST_VOICE", "alloy"),
+		EnableMarkitdown:             getEnvBool("ENABLE_MARKITDOWN", true),
 		AllowMultipleNotesOfSameType: getEnvBool("ALLOW_MULTIPLE_NOTES_OF_SAME_TYPE", true),
-		LangChainAPIKey:  getEnv("LANGCHAIN_API_KEY", ""),
-		LangChainProject: getEnv("LANGCHAIN_PROJECT", "open-notebook"),
+		LangChainAPIKey:              getEnv("LANGCHAIN_API_KEY", ""),
+		LangChainProject:             getEnv("LANGCHAIN_PROJECT", "open-notebook"),
+
+		JWTSecret: getEnv("JWT_SECRET", "your-secret-key-change-me"),
+
+		GithubClientID:     getEnv("GITHUB_CLIENT_ID", ""),
+		GithubClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
+		GithubRedirectURL:  getEnv("GITHUB_REDIRECT_URL", ""),
+
+		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
+		GoogleRedirectURL:  getEnv("GOOGLE_REDIRECT_URL", ""),
 	}
 
 	// Auto-detect provider from base URL or model name
@@ -123,15 +158,15 @@ func LoadConfig() Config {
 	return cfg
 }
 
-	// ValidateConfig validates the configuration
-	func ValidateConfig(cfg Config) error {
-		// Check if at least one LLM provider is configured
-		hasOpenAI := cfg.OpenAIAPIKey != ""
-		hasOllama := cfg.OllamaBaseURL != ""
+// ValidateConfig validates the configuration
+func ValidateConfig(cfg Config) error {
+	// Check if at least one LLM provider is configured
+	hasOpenAI := cfg.OpenAIAPIKey != ""
+	hasOllama := cfg.OllamaBaseURL != ""
 
-		if !hasOpenAI && !hasOllama {
-			return fmt.Errorf("either OPENAI_API_KEY or OLLAMA_BASE_URL must be set")
-		}
+	if !hasOpenAI && !hasOllama {
+		return fmt.Errorf("either OPENAI_API_KEY or OLLAMA_BASE_URL must be set")
+	}
 
 	// Validate vector store configuration
 	switch cfg.VectorStoreType {

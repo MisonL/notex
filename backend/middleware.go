@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/kataras/golog"
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 )
@@ -175,4 +177,123 @@ func AuditMiddlewareLite() gin.HandlerFunc {
 
 		auditLogger.Info(msg)
 	}
+}
+		
+		// AuthMiddleware authenticates requests using JWT
+		func AuthMiddleware(secret string) gin.HandlerFunc {
+			return func(c *gin.Context) {
+				tokenString := c.GetHeader("Authorization")
+				if tokenString == "" {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+					return
+				}
+
+				// Remove "Bearer " prefix
+				if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+					tokenString = tokenString[7:]
+				}
+
+				token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+					if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+						return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+					}
+					return []byte(secret), nil
+				})
+
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+					return
+				}
+
+				if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+					userID, ok := claims["user_id"].(string)
+					if !ok {
+						c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+						return
+					}
+					c.Set("user_id", userID)
+				} else {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+					return
+				}
+
+				c.Next()
+			}
+		}
+
+		// OptionalAuthMiddleware tries to authenticate using JWT, but doesn't require it
+		// It supports Authorization header, cookie, and token URL parameter
+		func OptionalAuthMiddleware(secret string) gin.HandlerFunc {
+			return func(c *gin.Context) {
+				var tokenString string
+
+				// Try Authorization header first
+				tokenString = c.GetHeader("Authorization")
+				if tokenString != "" {
+					auditLogger.Infof("OptionalAuth: Found Authorization header")
+					// Remove "Bearer " prefix
+					if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+						tokenString = tokenString[7:]
+					}
+				}
+
+				// Try cookie
+				if tokenString == "" {
+					if cookie, err := c.Cookie("token"); err == nil && cookie != "" {
+						tokenString = cookie
+						auditLogger.Infof("OptionalAuth: Found token in cookie")
+					}
+				}
+
+				// Try token parameter as fallback
+				if tokenString == "" {
+					tokenString = c.Query("token")
+					if tokenString != "" {
+						auditLogger.Infof("OptionalAuth: Found token in query parameter")
+					}
+				}
+
+				// If no token found, continue without setting user_id
+				if tokenString == "" {
+					auditLogger.Infof("OptionalAuth: No token found (checked header, cookie, and query param)")
+					c.Next()
+					return
+				}
+
+				// Try to validate token
+				token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+					if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+						return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+					}
+					return []byte(secret), nil
+				})
+
+				if err != nil {
+					// Invalid token, continue without setting user_id
+					auditLogger.Infof("OptionalAuth: Invalid token: %v", err)
+					c.Next()
+					return
+				}
+
+				if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+					if userID, ok := claims["user_id"].(string); ok {
+						auditLogger.Infof("OptionalAuth: Successfully authenticated user_id: %s", userID)
+						c.Set("user_id", userID)
+					}
+				}
+
+				c.Next()
+			}
+		}
+
+// GetAuditLogger returns the audit logger instance
+func GetAuditLogger() *golog.Logger {
+	return auditLogger
+}
+
+// LogUserActivity logs user activity to the audit log file
+func LogUserActivity(action, userID, resourceType, resourceID, resourceName, details, ipAddress, userAgent string) {
+	msg := fmt.Sprintf("[USER_ACTIVITY] action=%s user_id=%s resource_type=%s resource_id=%s resource_name=%q details=%q ip=%s user_agent=%q",
+		action, userID, resourceType, resourceID, resourceName, details, ipAddress, userAgent)
+	auditLogger.Info(msg)
 }

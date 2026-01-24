@@ -4,40 +4,54 @@ import (
 	"time"
 )
 
+// User represents a registered user
+type User struct {
+	ID        string    `json:"id"`
+	Email     string    `json:"email"`
+	Name      string    `json:"name"`
+	AvatarURL string    `json:"avatar_url"`
+	Provider  string    `json:"provider"` // google, github
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // Source represents a document source added to a notebook
 type Source struct {
-	ID          string                 `json:"id"`
-	NotebookID  string                 `json:"notebook_id"`
-	Name        string                 `json:"name"`
-	Type        string                 `json:"type"` // "file", "url", "text", "youtube"
-	URL         string                 `json:"url,omitempty"`
-	Content     string                 `json:"content,omitempty"`
-	FileName    string                 `json:"file_name,omitempty"`
-	FileSize    int64                  `json:"file_size,omitempty"`
-	ChunkCount  int                    `json:"chunk_count"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ID         string                 `json:"id"`
+	NotebookID string                 `json:"notebook_id"`
+	Name       string                 `json:"name"`
+	Type       string                 `json:"type"` // "file", "url", "text", "youtube"
+	URL        string                 `json:"url,omitempty"`
+	Content    string                 `json:"content,omitempty"`
+	FileName   string                 `json:"file_name,omitempty"`
+	FileSize   int64                  `json:"file_size,omitempty"`
+	ChunkCount int                    `json:"chunk_count"`
+	CreatedAt  time.Time              `json:"created_at"`
+	UpdatedAt  time.Time              `json:"updated_at"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // Note represents a note generated from sources
 type Note struct {
-	ID          string                 `json:"id"`
-	NotebookID  string                 `json:"notebook_id"`
-	Title       string                 `json:"title"`
-	Content     string                 `json:"content"`
-	Type        string                 `json:"type"` // "summary", "faq", "study_guide", "outline", "custom"
-	SourceIDs   []string               `json:"source_ids"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ID         string                 `json:"id"`
+	NotebookID string                 `json:"notebook_id"`
+	Title      string                 `json:"title"`
+	Content    string                 `json:"content"`
+	Type       string                 `json:"type"` // "summary", "faq", "study_guide", "outline", "custom"
+	SourceIDs  []string               `json:"source_ids"`
+	CreatedAt  time.Time              `json:"created_at"`
+	UpdatedAt  time.Time              `json:"updated_at"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // Notebook represents a collection of sources and notes
 type Notebook struct {
 	ID          string                 `json:"id"`
+	UserID      string                 `json:"user_id"`
 	Name        string                 `json:"name"`
 	Description string                 `json:"description,omitempty"`
+	IsPublic    bool                   `json:"is_public"`
+	PublicToken string                 `json:"public_token,omitempty"`
 	CreatedAt   time.Time              `json:"created_at"`
 	UpdatedAt   time.Time              `json:"updated_at"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
@@ -45,61 +59,65 @@ type Notebook struct {
 
 // NotebookWithStats represents a notebook with statistics
 type NotebookWithStats struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	SourceCount int                    `json:"source_count"`
-	NoteCount   int                    `json:"note_count"`
+	ID            string                 `json:"id"`
+	UserID        string                 `json:"user_id"`
+	Name          string                 `json:"name"`
+	Description   string                 `json:"description,omitempty"`
+	IsPublic      bool                   `json:"is_public"`
+	PublicToken   string                 `json:"public_token,omitempty"`
+	CreatedAt     time.Time              `json:"created_at"`
+	UpdatedAt     time.Time              `json:"updated_at"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	SourceCount   int                    `json:"source_count"`
+	NoteCount     int                    `json:"note_count"`
+	CoverImageURL string                 `json:"cover_image_url,omitempty"`
 }
 
 // ChatMessage represents a chat message
 type ChatMessage struct {
-	ID         string                 `json:"id"`
-	SessionID  string                 `json:"session_id"`
-	Role       string                 `json:"role"` // "user", "assistant", "system"
-	Content    string                 `json:"content"`
-	Sources    []string               `json:"sources,omitempty"` // Source IDs referenced
-	CreatedAt  time.Time              `json:"created_at"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	ID        string                 `json:"id"`
+	SessionID string                 `json:"session_id"`
+	Role      string                 `json:"role"` // "user", "assistant", "system"
+	Content   string                 `json:"content"`
+	Sources   []string               `json:"sources,omitempty"` // Source IDs referenced
+	CreatedAt time.Time              `json:"created_at"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ChatSession represents a chat session within a notebook
 type ChatSession struct {
-	ID           string                 `json:"id"`
-	NotebookID   string                 `json:"notebook_id"`
-	Title        string                 `json:"title"`
-	Messages     []ChatMessage          `json:"messages"`
-	CreatedAt    time.Time              `json:"created_at"`
-	UpdatedAt    time.Time              `json:"updated_at"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	ID         string                 `json:"id"`
+	NotebookID string                 `json:"notebook_id"`
+	Title      string                 `json:"title"`
+	Messages   []ChatMessage          `json:"messages"`
+	CreatedAt  time.Time              `json:"created_at"`
+	UpdatedAt  time.Time              `json:"updated_at"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // Podcast represents an audio podcast generated from sources
 type Podcast struct {
-	ID          string                 `json:"id"`
-	NotebookID  string                 `json:"notebook_id"`
-	Title       string                 `json:"title"`
-	Script      string                 `json:"script"`
-	AudioURL    string                 `json:"audio_url,omitempty"`
-	Duration    int                    `json:"duration,omitempty"` // in seconds
-	Voice       string                 `json:"voice"`
-	Status      string                 `json:"status"` // "pending", "generating", "completed", "error"
-	SourceIDs   []string               `json:"source_ids"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ID         string                 `json:"id"`
+	NotebookID string                 `json:"notebook_id"`
+	Title      string                 `json:"title"`
+	Script     string                 `json:"script"`
+	AudioURL   string                 `json:"audio_url,omitempty"`
+	Duration   int                    `json:"duration,omitempty"` // in seconds
+	Voice      string                 `json:"voice"`
+	Status     string                 `json:"status"` // "pending", "generating", "completed", "error"
+	SourceIDs  []string               `json:"source_ids"`
+	CreatedAt  time.Time              `json:"created_at"`
+	UpdatedAt  time.Time              `json:"updated_at"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // TransformationRequest represents a request to generate a note
 type TransformationRequest struct {
-	Type       string   `json:"type"`       // "summary", "faq", "study_guide", "outline", "podcast", "custom"
-	Prompt     string   `json:"prompt"`     // Custom prompt for "custom" type
-	SourceIDs  []string `json:"source_ids"` // Specific sources to use, empty = all
-	Length     string   `json:"length"`     // "short", "medium", "long"
-	Format     string   `json:"format"`     // "markdown", "bullet_points", "paragraphs"
+	Type      string   `json:"type"`       // "summary", "faq", "study_guide", "outline", "podcast", "custom"
+	Prompt    string   `json:"prompt"`     // Custom prompt for "custom" type
+	SourceIDs []string `json:"source_ids"` // Specific sources to use, empty = all
+	Length    string   `json:"length"`     // "short", "medium", "long"
+	Format    string   `json:"format"`     // "markdown", "bullet_points", "paragraphs"
 }
 
 // TransformationResponse represents the response from a transformation
@@ -128,11 +146,11 @@ type ChatRequest struct {
 
 // ChatResponse represents a chat response
 type ChatResponse struct {
-	Message     string                 `json:"message"`
-	Sources     []SourceSummary        `json:"sources"`
-	SessionID   string                 `json:"session_id"`
-	MessageID   string                 `json:"message_id"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Message   string                 `json:"message"`
+	Sources   []SourceSummary        `json:"sources"`
+	SessionID string                 `json:"session_id"`
+	MessageID string                 `json:"message_id"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ErrorResponse represents an error response
@@ -169,4 +187,18 @@ type ModelItem struct {
 // ModelListResponse represents a list of models
 type ModelListResponse struct {
 	Models []ModelItem `json:"models"`
+}
+
+// ActivityLog represents a user activity log entry
+type ActivityLog struct {
+	ID           string    `json:"id"`
+	UserID       string    `json:"user_id"`
+	Action       string    `json:"action"`        // "login", "create_notebook", "add_source", "create_note", etc.
+	ResourceType string    `json:"resource_type"` // "notebook", "source", "note", etc.
+	ResourceID   string    `json:"resource_id"`
+	ResourceName string    `json:"resource_name"`
+	Details      string    `json:"details"` // Additional details in JSON format
+	IPAddress    string    `json:"ip_address"`
+	UserAgent    string    `json:"user_agent"`
+	CreatedAt    time.Time `json:"created_at"`
 }

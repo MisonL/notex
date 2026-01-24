@@ -13,29 +13,333 @@
     <link rel="stylesheet" href="/static/style.css?v=10" />
     <script src="https://s4.zstatic.net/ajax/libs/marked/16.3.0/lib/marked.umd.min.js"></script>
     <script src="https://s4.zstatic.net/ajax/libs/mermaid/11.4.0/mermaid.min.js"></script>
-  </head>
-  <body>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            },
+            startup: {
+                pageReady: () => {
+                    return MathJax.startup.defaultPageReady().then(() => {
+                        console.log('MathJax initial complete');
+                    });
+                }
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://s4.zstatic.net/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
     <div class="app-container">
-      <!-- Header -->
-      <header class="app-header hidden">
-        <div class="header-brand">
-          <div class="logo-mark">
-            <svg
-              viewBox="0 0 40 40"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <rect x="4" y="4" width="32" height="32" rx="2" />
-              <line x1="12" y1="12" x2="28" y2="12" />
-              <line x1="12" y1="18" x2="24" y2="18" />
-              <line x1="12" y1="24" x2="20" y2="24" />
-            </svg>
-          </div>
-          <div class="logo-type">
-            <span class="logo-name">NOTEX</span>
-            <span class="logo-tagline">知识存档</span>
-          </div>
+        <!-- Header -->
+        <header class="app-header hidden">
+            <div class="header-brand">
+                <div class="logo-mark">
+                    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="4" y="4" width="32" height="32" rx="2"/>
+                        <line x1="12" y1="12" x2="28" y2="12"/>
+                        <line x1="12" y1="18" x2="24" y2="18"/>
+                        <line x1="12" y1="24" x2="20" y2="24"/>
+                    </svg>
+                </div>
+                <div class="logo-type">
+                    <span class="logo-name">NOTEX</span>
+                    <span class="logo-tagline">知识存档</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="https://github.com/smallnest/notex" target="_blank" class="btn-github" title="GitHub 仓库">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.042-1.416-4.042-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.44-1.304.806-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                </a>
+                <div id="authContainer" class="auth-container">
+                    <button id="btnLogin" class="btn-primary btn-sm">登录</button>
+                    <div id="userProfile" class="user-profile hidden">
+                        <img id="userAvatar" src="" alt="Avatar" class="user-avatar">
+                        <span id="userName" class="user-name"></span>
+                        <button id="btnLogout" class="btn-text btn-sm">退出</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Landing Page: Notebook List -->
+        <section class="landing-page hidden" id="landingPage">
+            <div class="landing-header">
+                <div class="landing-brand">
+                    <h1>我的笔记本</h1>
+                    <p>管理和探索你的知识存档</p>
+                </div>
+                <button class="btn-primary btn-large" id="btnNewNotebookLanding">
+                    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="8" y1="2" x2="8" y2="14"/>
+                        <line x1="2" y1="8" x2="14" y2="8"/>
+                    </svg>
+                    新建笔记本
+                </button>
+            </div>
+
+            <!-- Public Notebooks Showcase -->
+            <div class="public-showcase" id="publicShowcase">
+                <div class="public-showcase-header">
+                    <h2 class="public-showcase-title">精选公开笔记本</h2>
+                    <p class="public-showcase-subtitle">探索社区分享的知识</p>
+                </div>
+                <div class="public-showcase-scroll">
+                    <div class="public-showcase-grid" id="publicShowcaseGrid">
+                        <!-- Public notebook cards will be rendered here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="notebook-grid" id="notebookGridLanding">
+                <!-- Notebook cards will be rendered here -->
+            </div>
+        </section>
+
+        <!-- Workspace (Hidden by default) -->
+        <div class="workspace-container hidden" id="workspaceContainer">
+            <nav class="workspace-nav">
+                <button class="btn-back" id="btnBackToList">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="15" y1="9" x2="3" y2="9"/>
+                        <polyline points="9,15 3,9 9,3"/>
+                    </svg>
+                    返回列表
+                </button>
+                <div class="current-notebook-info" id="notebookNameContainer">
+                    <h2 id="currentNotebookName" class="notebook-name-display">笔记本名称</h2>
+                    <div id="notebookNameEditor" class="notebook-name-editor hidden">
+                        <input type="text" id="notebookNameInput" class="notebook-name-input" maxlength="50" />
+                        <div class="notebook-name-actions">
+                            <button id="btnSaveNotebookName" class="btn-icon btn-save" title="保存">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="13,4 6,11 3,8"/>
+                                </svg>
+                            </button>
+                            <button id="btnCancelNotebookName" class="btn-icon btn-cancel" title="取消">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="4" y1="4" x2="12" y2="12"/>
+                                    <line x1="12" y1="4" x2="4" y2="12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="workspace-actions">
+                    <button class="btn-share" id="btnShareNotebook" title="分享笔记本">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="4" r="2"/>
+                            <circle cx="5" cy="11" r="2"/>
+                            <circle cx="11" cy="11" r="2"/>
+                            <line x1="6.5" y1="10" x2="9.5" y2="5"/>
+                            <line x1="6.5" y1="12" x2="9.5" y2="12"/>
+                        </svg>
+                        <span id="shareButtonText">分享</span>
+                    </button>
+                    <button class="btn-new-notebook" id="btnNewNotebook">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="8" y1="2" x2="8" y2="14"/>
+                            <line x1="2" y1="8" x2="14" y2="8"/>
+                        </svg>
+                        新建笔记本
+                    </button>
+                    <a href="https://github.com/smallnest/notex" target="_blank" class="btn-github" title="GitHub 仓库" style="margin-right: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.042-1.416-4.042-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.44-1.304.806-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                        </svg>
+                    </a>
+                    <div id="workspaceAuthContainer" class="auth-container">
+                        <button id="btnLoginWorkspace" class="btn-primary btn-sm hidden">登录</button>
+                        <div id="userProfileWorkspace" class="user-profile hidden">
+                            <img id="userAvatarWorkspace" src="" alt="Avatar" class="user-avatar">
+                            <span id="userNameWorkspace" class="user-name"></span>
+                            <button id="btnLogoutWorkspace" class="btn-text btn-sm">退出</button>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <main class="main-grid">
+                <!-- Left Panel: Sources -->
+                <aside class="panel panel-left">
+                    <div class="panel-header">
+                        <h2 class="panel-title">来源</h2>
+                        <div class="panel-actions">
+                            <button class="btn-icon" id="btnAddSource" title="添加来源">
+                                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="9" y1="2" x2="9" y2="16"/>
+                                    <line x1="2" y1="9" x2="16" y2="9"/>
+                                </svg>
+                            </button>
+                            <button class="btn-toggle-side" id="btnToggleLeft" title="切换侧边栏">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M10 3L5 8L10 13" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="sources-list-container" id="sourcesGrid">
+                        <!-- Sources rendered here -->
+                    </div>
+                </aside>
+
+                <div class="resizer" id="resizerLeft"></div>
+
+                <!-- Center Panel: Chat -->
+                <section class="panel panel-center">
+                    <div class="panel-header">
+                        <div class="panel-tabs" id="centerPanelTabs">
+                            <button class="tab-btn" data-tab="chat">对话</button>
+                            <button class="tab-btn" data-tab="note" id="tabBtnNote">
+                                笔记
+                                <span class="tab-close" id="btnCloseNote">×</span>
+                            </button>
+                            <button class="tab-btn hidden" data-tab="notes_list" id="tabBtnNotesList">
+                                笔记列表
+                            </button>
+                        </div>
+                    </div>
+                    <div class="chat-messages-wrapper">
+                        <div class="chat-messages" id="chatMessages">
+                            <!-- Chat messages -->
+                        </div>
+                        <div class="chat-input-wrapper">
+                            <form class="chat-form" id="chatForm">
+                                <input
+                                    type="text"
+                                    class="chat-input"
+                                    id="chatInput"
+                                    placeholder="输入问题..."
+                                    autocomplete="off"
+                                >
+                                <button type="submit" class="btn-send" id="btnSend">
+                                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="2" y1="16" x2="16" y2="2"/>
+                                        <polyline points="2,2 2,16 16,16"/>
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="resizer" id="resizerRight"></div>
+
+                <!-- Right Panel: Transform & Notes Stack -->
+                <aside class="panel panel-right">
+                    <!-- Transform Section -->
+                    <div class="workspace-section section-transform">
+                        <div class="panel-header studio-header">
+                            <button class="btn-toggle-side" id="btnToggleRight" title="切换侧边栏">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M6 3L11 8L6 13" />
+                                </svg>
+                            </button>
+                            <h2 class="panel-title">STUDIO</h2>
+                        </div>
+                        <div class="transform-options">
+                            <div class="transform-grid">
+                                <button class="transform-card" data-type="summary">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                    </div>
+                                    <span class="transform-name">摘要</span>
+                                </button>
+                                <button class="transform-card" data-type="faq">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                    </div>
+                                    <span class="transform-name">常见问题</span>
+                                </button>
+                                <button class="transform-card" data-type="study_guide">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                                    </div>
+                                    <span class="transform-name">学习指南</span>
+                                </button>
+                                <button class="transform-card" data-type="outline">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                                    </div>
+                                    <span class="transform-name">大纲</span>
+                                </button>
+                                <button class="transform-card" data-type="podcast">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                                    </div>
+                                    <span class="transform-name">播客</span>
+                                </button>
+                                <button class="transform-card" data-type="timeline">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                    </div>
+                                    <span class="transform-name">时间线</span>
+                                </button>
+                                <button class="transform-card" data-type="glossary">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                                    </div>
+                                    <span class="transform-name">术语表</span>
+                                </button>
+                                <button class="transform-card" data-type="quiz">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                    </div>
+                                    <span class="transform-name">测验</span>
+                                </button>
+                                <button class="transform-card" data-type="mindmap">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                                    </div>
+                                    <span class="transform-name">思维导图</span>
+                                </button>
+                                <button class="transform-card" data-type="infograph">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M21 12H3"/><path d="M12 3v18"/><path d="M16 8l-8 8"/><path d="M8 8l8 8"/></svg>
+                                    </div>
+                                    <span class="transform-name">信息图</span>
+                                </button>
+                                <button class="transform-card" data-type="ppt">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                                    </div>
+                                    <span class="transform-name">幻灯片</span>
+                                </button>
+                                <button class="transform-card" data-type="insight">
+                                    <div class="transform-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line><path d="M12 2L12 12"></path><path d="M12 12L16 16"></path></svg>
+                                    </div>
+                                    <span class="transform-name">洞察</span>
+                                </button>
+                            </div>
+                            <div class="transform-custom-pill">
+                                <input type="text" id="customPrompt" placeholder="自定义生成..." autocomplete="off">
+                                <button id="btnCustomTransform">生成</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notes Section -->
+                    <div class="workspace-section section-notes">
+                        <div class="panel-header">
+                            <h2 class="panel-title">笔记 (0)</h2>
+                            <button class="btn-text" id="btnShowNotesDetails">详情</button>
+                        </div>
+                        <div class="notes-list" id="notesList">
+                            <!-- Notes rendered here -->
+                        </div>
+                    </div>
+                </aside>
+            </main>
+>>>>>>> origin/master
         </div>
         <div class="header-actions">
           <a
@@ -733,6 +1037,7 @@
             <h3>设置</h3>
             <button class="btn-close" id="btnCloseSettingsModal">×</button>
         </div>
+<<<<<<< HEAD
         <form class="modal-body" id="settingsForm">
             <div class="form-group">
                 <label class="input-label">聊天渠道 (Chat Channel)</label>
@@ -782,6 +1087,44 @@
                 <button type="submit" class="btn-primary">保存设置</button>
             </div>
         </form>
+=======
+
+        <!-- Share Notebook Modal -->
+        <div class="modal" id="shareModal">
+            <div class="modal-header">
+                <h3>分享笔记本</h3>
+                <button class="btn-close" id="btnCloseShareModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="share-content">
+                    <p id="shareNotebookName" class="share-notebook-name"></p>
+
+                    <div class="share-status" id="shareStatus">
+                        <div class="status-icon" id="shareStatusIcon"></div>
+                        <span id="shareStatusText"></span>
+                    </div>
+
+                    <div class="share-link-section" id="shareLinkSection">
+                        <label class="input-label">公开链接</label>
+                        <div class="share-link-wrapper">
+                            <input type="text" class="input-field font-mono share-link-input" id="shareLinkInput" readonly>
+                            <button class="btn-copy-link" id="btnCopyLink" title="复制链接">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="7" width="10" height="8" rx="1"/>
+                                    <path d="M7 7V5a3 3 0 0 1 6 0v2"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="share-actions">
+                        <button type="button" class="btn-secondary" id="btnCancelShare">关闭</button>
+                        <button type="button" class="btn-primary" id="btnToggleShare">公开笔记本</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+>>>>>>> origin/master
     </div>
 
     <!-- Loading Overlay -->
@@ -792,6 +1135,7 @@
 
     <!-- Templates -->
     <template id="notebookCardTemplate">
+<<<<<<< HEAD
       <div class="notebook-card" data-id="">
         <div class="notebook-card-content">
           <div class="notebook-card-icon">
@@ -812,6 +1156,39 @@
             <span class="stat-sources">0 来源</span>
             <span class="stat-notes">0 笔记</span>
           </div>
+=======
+        <div class="notebook-card" data-id="">
+            <div class="notebook-card-content">
+                <div class="notebook-card-icon">
+                    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="8" y="8" width="24" height="24" rx="2"/>
+                        <line x1="14" y1="16" x2="26" y2="16"/>
+                        <line x1="14" y1="22" x2="22" y2="22"/>
+                    </svg>
+                </div>
+                <h3 class="notebook-card-name"></h3>
+                <p class="notebook-card-desc"></p>
+                <div class="notebook-card-stats">
+                    <span class="stat-sources">0 来源</span>
+                    <span class="stat-notes">0 笔记</span>
+                    <span class="stat-date"></span>
+                    <button class="btn-share-card" title="分享">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="10" cy="4" r="2"/>
+                            <circle cx="4" cy="10" r="2"/>
+                            <circle cx="10" cy="10" r="2"/>
+                            <line x1="5.5" y1="9" x2="8.5" y2="5"/>
+                            <line x1="5.5" y1="11" x2="8.5" y2="11"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <button class="btn-delete-card" title="删除">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5"/>
+                </svg>
+            </button>
+>>>>>>> origin/master
         </div>
         <button class="btn-delete-card" title="删除">
           <svg
@@ -832,6 +1209,7 @@
     </template>
 
     <template id="notebookTemplate">
+<<<<<<< HEAD
       <div class="notebook-item" data-id="">
         <div class="notebook-header">
           <svg
@@ -848,6 +1226,26 @@
             <line x1="5" y1="7" x2="9" y2="7" />
           </svg>
           <span class="notebook-name"></span>
+=======
+        <div class="notebook-item" data-id="">
+            <div class="notebook-header">
+                <svg class="notebook-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="2" y="2" width="12" height="12" rx="1"/>
+                    <line x1="5" y1="5" x2="11" y2="5"/>
+                    <line x1="5" y1="7" x2="9" y2="7"/>
+                </svg>
+                <span class="notebook-name"></span>
+            </div>
+            <div class="notebook-meta">
+                <span class="notebook-sources">0 来源</span>
+                <span class="notebook-notes">0 笔记</span>
+            </div>
+            <button class="btn-delete-notebook" title="删除笔记本">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M4.5 4.5L9.5 9.5M9.5 4.5L4.5 9.5"/>
+                </svg>
+            </button>
+>>>>>>> origin/master
         </div>
         <div class="notebook-meta">
           <span class="notebook-sources">0 来源</span>
@@ -888,6 +1286,7 @@
     </template>
 
     <template id="noteTemplate">
+<<<<<<< HEAD
       <div class="note-item" data-id="">
         <div class="note-type-badge"></div>
         <h4 class="note-title"></h4>
@@ -895,6 +1294,21 @@
         <div class="note-meta">
           <span class="note-date"></span>
           <span class="note-sources"></span>
+=======
+        <div class="note-item" data-id="">
+            <div class="note-type-badge"></div>
+            <h4 class="note-title"></h4>
+            <div class="note-preview"></div>
+            <div class="note-meta">
+                <span class="note-date"></span>
+                <span class="note-sources"></span>
+            </div>
+            <button class="btn-delete-note" title="删除笔记">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M4.5 4.5L9.5 9.5M9.5 4.5L4.5 9.5"/>
+                </svg>
+            </button>
+>>>>>>> origin/master
         </div>
         <button class="btn-delete-note" title="删除笔记">
           <svg

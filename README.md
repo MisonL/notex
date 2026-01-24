@@ -46,38 +46,104 @@ cd notex
 # Install dependencies
 go mod tidy
 
-# Set your API key
-export OPENAI_API_KEY=your_key_here
-
 # Run the server
 go run . -server
 ```
 
 Open your browser to `http://localhost:8080`
 
-### Using Ollama (Local, Free)
+## ⚙️ Configuration
+
+Notex uses environment variables for configuration. The recommended way to configure the application is to create a `.env` file.
+
+### Step 1: Create Configuration File
+
+Copy the example configuration file to create your local configuration:
 
 ```bash
-# Make sure Ollama is running
-ollama serve
+cp .env.example .env
+```
 
-# Run with Ollama
-export OLLAMA_BASE_URL=http://localhost:11434
+### Step 2: Configure Your LLM Provider
+
+Edit the `.env` file and configure **one** of the following LLM providers:
+
+#### Option A: Using OpenAI (Cloud-based)
+
+OpenAI provides high-quality models but requires an API key and charges per usage.
+
+1. Get an API key from [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+2. Edit `.env` and configure:
+
+```env
+# OpenAI Configuration
+OPENAI_API_KEY=sk-your-actual-api-key-here
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+EMBEDDING_MODEL=text-embedding-3-small
+```
+
+**Available OpenAI Models:**
+- `gpt-4o-mini` - Fast and cost-effective (recommended)
+- `gpt-4o` - Most capable
+- `gpt-3.5-turbo` - Legacy option
+
+**Tips:**
+- You can also use compatible OpenAI APIs like Azure OpenAI or other providers by changing `OPENAI_BASE_URL`
+- For example, to use DeepSeek: `OPENAI_BASE_URL=https://api.deepseek.com/v1` and `OPENAI_MODEL=deepseek-chat`
+
+#### Option B: Using Ollama (Local, Free)
+
+Ollama runs locally on your machine and is completely free, but requires a capable computer.
+
+1. Install Ollama from [https://ollama.com](https://ollama.com)
+2. Pull a model (e.g., `ollama pull llama3.2`)
+3. Start Ollama: `ollama serve`
+4. Edit `.env` and configure:
+
+```env
+# Ollama Configuration
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+```
+
+**Available Ollama Models:**
+- `llama3.2` - Recommended balance of speed and quality
+- `qwen2.5` - Excellent for Chinese content
+- `mistral` - Good English performance
+- `codellama` - Specialized for code
+
+**Tips:**
+- Ollama models run entirely on your machine - no data leaves your computer
+- Make sure Ollama is running before starting Notex
+- Larger models require more RAM and CPU
+
+### Step 3: Optional Google Gemini (for Infographics)
+
+To use the infographic generation feature with Google's Gemini Nano Banana:
+
+```env
+GOOGLE_API_KEY=your-google-api-key-here
+```
+
+Get your key from [https://makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey)
+
+### Step 4: Run the Application
+
+After configuring your `.env` file, simply run:
+
+```bash
 go run . -server
 ```
 
-### Alternative: Build and Run
+The application will automatically load your `.env` configuration and start at `http://localhost:8080`
+
+### Build and Run (Optional)
+
+If you prefer to build a binary instead of using `go run`:
 
 ```bash
-# Build the binary
 go build -o notex .
-
-# Run with OpenAI
-export OPENAI_API_KEY=your_key_here
-./notex -server
-
-# Or run with Ollama
-export OLLAMA_BASE_URL=http://localhost:11434
 ./notex -server
 ```
 
@@ -131,59 +197,36 @@ Click any transformation card to generate:
 
 Or use the custom prompt field for any other transformation.
 
-## ⚙️ Configuration
+### Additional Configuration Options
 
-### Environment Variables
+For advanced users, the `.env` file supports additional configuration options:
 
-| Variable            | Description           | Default                        |
-| ------------------- | --------------------- | ------------------------------ |
-| `OPENAI_API_KEY`    | OpenAI API key        | Required (unless using Ollama) |
-| `OPENAI_BASE_URL`   | Custom API base URL   | OpenAI default                 |
-| `OPENAI_MODEL`      | Model name            | `gpt-4o-mini`                  |
-| `EMBEDDING_MODEL`   | Embedding model       | `text-embedding-3-small`       |
-| `OLLAMA_BASE_URL`   | Ollama server URL     | `http://localhost:11434`       |
-| `OLLAMA_MODEL`      | Ollama model name     | `llama3.2`                     |
-| `GOOGLE_API_KEY`    | Google Gemini API key | Required for Infographics      |
-| `SERVER_HOST`       | Server host           | `0.0.0.0`                      |
-| `SERVER_PORT`       | Server port           | `8080`                         |
-| `VECTOR_STORE_TYPE` | Vector store backend  | `sqlite`                       |
-| `STORE_PATH`        | Database path         | `./data/checkpoints.db`        |
-| `MAX_SOURCES`       | Max sources for RAG   | `5`                            |
-| `CHUNK_SIZE`        | Document chunk size   | `1000`                         |
-| `CHUNK_OVERLAP`     | Chunk overlap         | `200`                          |
+```env
+# Server Configuration
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8080
 
-### Vector Store Options
+# Vector Store (default: sqlite)
+# Options: sqlite, memory, supabase, postgres, redis
+VECTOR_STORE_TYPE=sqlite
 
-- `sqlite` - Local SQLite database (default)
-- `memory` - In-memory vectors
-- `supabase` - Supabase vector store
-- `postgres` / `pgvector` - PostgreSQL with pgvector
-- `redis` - Redis with RediSearch
+# RAG Processing
+MAX_SOURCES=5          # Maximum sources to retrieve for context
+CHUNK_SIZE=1000        # Document chunk size for processing
+CHUNK_OVERLAP=200      # Overlap between chunks
 
-### Example Configuration Files
+# Document Conversion
+ENABLE_MARKITDOWN=true  # Use Microsoft markitdown for better PDF/DOCX conversion
 
-**docker-compose.yml** (for PostgreSQL + pgvector)
+# Podcast Generation
+ENABLE_PODCAST=true
+PODCAST_VOICE=alloy    # Options: alloy, echo, fable, onyx, nova, shimmer
 
-```yaml
-version: '3.8'
-services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_DB: notebook
-      POSTGRES_USER: notebook
-      POSTGRES_PASSWORD: secret
-    ports:
-      - "5432:5432"
-
-  app:
-    build: .
-    environment:
-      - POSTGRES_URL=postgres://notebook:secret@postgres:5432/notebook
-      - VECTOR_STORE_TYPE=postgres
-    ports:
-      - "8080:8080"
+# Feature Flags
+ALLOW_DELETE=true
+ALLOW_MULTIPLE_NOTES_OF_SAME_TYPE=true
 ```
+
 ## 🔧 Development
 
 ### Running Tests

@@ -99,6 +99,19 @@ html {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Utilities */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 body {
   font-family: var(--font-sans);
   background: linear-gradient(135deg, #f5f7fa 0%, #e8f0fe 100%);

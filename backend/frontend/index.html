@@ -11,6 +11,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/style.css?v=10" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📓</text></svg>">
     <script src="https://s4.zstatic.net/ajax/libs/marked/16.3.0/lib/marked.umd.min.js"></script>
     <script src="https://s4.zstatic.net/ajax/libs/mermaid/11.4.0/mermaid.min.js"></script>
     <script>
@@ -117,7 +118,8 @@
                 <div class="current-notebook-info" id="notebookNameContainer">
                     <h2 id="currentNotebookName" class="notebook-name-display">笔记本名称</h2>
                     <div id="notebookNameEditor" class="notebook-name-editor hidden">
-                        <input type="text" id="notebookNameInput" class="notebook-name-input" maxlength="50" />
+                        <label for="notebookNameInput" class="visually-hidden">笔记本名称</label>
+                        <input type="text" id="notebookNameInput" class="notebook-name-input" maxlength="50" autocomplete="off" />
                         <div class="notebook-name-actions">
                             <button id="btnSaveNotebookName" class="btn-icon btn-save" title="保存">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -213,6 +215,7 @@
                         </div>
                         <div class="chat-input-wrapper">
                             <form class="chat-form" id="chatForm">
+                                <label for="chatInput" class="visually-hidden">输入对话内容</label>
                                 <input
                                     type="text"
                                     class="chat-input"
@@ -321,6 +324,7 @@
                                 </button>
                             </div>
                             <div class="transform-custom-pill">
+                                <label for="customPrompt" class="visually-hidden">自定义生成指令</label>
                                 <input type="text" id="customPrompt" placeholder="自定义生成..." autocomplete="off">
                                 <button id="btnCustomTransform">生成</button>
                             </div>
@@ -348,23 +352,27 @@
         </div>
         <form class="modal-body" id="newNotebookForm">
           <div class="form-group">
-            <label class="input-label">名称</label>
+            <label class="input-label" for="nbNameInput">名称</label>
             <input
               type="text"
               class="input-field"
+              id="nbNameInput"
               name="name"
               placeholder="笔记本名称"
               required
               maxlength="50"
+              autocomplete="off"
             />
           </div>
           <div class="form-group">
-            <label class="input-label">描述</label>
+            <label class="input-label" for="nbDescInput">描述</label>
             <textarea
               class="input-field"
+              id="nbDescInput"
               name="description"
               placeholder="简要描述..."
               rows="2"
+              autocomplete="off"
             ></textarea>
           </div>
           <div class="modal-actions">
@@ -400,6 +408,7 @@
                 </svg>
                 <p>点击或拖拽文件到这里上传</p>
                 <p class="sub-text">支持 PDF, TXT, MD, Markdown</p>
+                <label for="fileInput" class="visually-hidden">上传文件</label>
                 <input type="file" id="fileInput" hidden multiple accept=".pdf,.txt,.md,.markdown">
               </div>
           </div>
@@ -407,12 +416,12 @@
           <div class="source-content" id="sourceText">
             <form id="textSourceForm">
               <div class="form-group">
-                <label class="input-label">标题</label>
-                <input type="text" class="input-field" name="title" placeholder="文本标题" required>
+                <label class="input-label" for="textSourceTitle">标题</label>
+                <input type="text" class="input-field" id="textSourceTitle" name="title" placeholder="文本标题" required autocomplete="off">
               </div>
               <div class="form-group">
-                <label class="input-label">内容</label>
-                <textarea class="input-field font-mono" name="content" rows="10" placeholder="在此粘贴文本内容..." required></textarea>
+                <label class="input-label" for="textSourceContent">内容</label>
+                <textarea class="input-field font-mono" id="textSourceContent" name="content" rows="10" placeholder="在此粘贴文本内容..." required autocomplete="off"></textarea>
               </div>
               <div class="modal-actions">
                 <button type="button" class="btn-secondary" id="btnCancelText">取消</button>
@@ -424,12 +433,12 @@
           <div class="source-content" id="sourceUrl">
             <form id="urlSourceForm">
               <div class="form-group">
-                <label class="input-label">网址</label>
-                <input type="url" class="input-field font-mono" name="url" placeholder="https://example.com/article" required>
+                <label class="input-label" for="urlSourceInput">网址</label>
+                <input type="url" class="input-field font-mono" id="urlSourceInput" name="url" placeholder="https://example.com/article" required autocomplete="url">
               </div>
               <div class="form-group">
-                <label class="input-label">名称 (可选)</label>
-                <input type="text" class="input-field" name="name" placeholder="文章标题">
+                <label class="input-label" for="urlSourceName">名称 (可选)</label>
+                <input type="text" class="input-field" id="urlSourceName" name="name" placeholder="文章标题" autocomplete="off">
               </div>
               <div class="modal-actions">
                 <button type="button" class="btn-secondary" id="btnCancelURL">取消</button>
@@ -448,8 +457,8 @@
         </div>
         <form class="modal-body" id="settingsForm">
             <div class="form-group">
-                <label class="input-label">聊天渠道 (Chat Channel)</label>
-                <select class="input-field" name="chat_provider" id="chatProviderSelect">
+                <label class="input-label" for="chatProviderSelect">聊天渠道 (Chat Channel)</label>
+                <select class="input-field" name="chat_provider" id="chatProviderSelect" autocomplete="off">
                     <option value="openai">OpenAI (或 兼容接口)</option>
                     <option value="ollama">Ollama (本地)</option>
                 </select>
@@ -471,8 +480,8 @@
                 </p>
             </div>
             <div class="form-group">
-                <label class="input-label">Embedding 模型提供商</label>
-                <select class="input-field" name="embedding_provider" id="embeddingProviderSelect">
+                <label class="input-label" for="embeddingProviderSelect">Embedding 模型提供商</label>
+                <select class="input-field" name="embedding_provider" id="embeddingProviderSelect" autocomplete="off">
                     <option value="google">Google Gemini</option>
                     <option value="ollama">Ollama</option>
                     <option value="openai">OpenAI (或 兼容接口)</option>
@@ -488,8 +497,8 @@
                 </p>
             </div>
             <div class="form-group">
-                <label class="input-label">图片生成模型 (Image Generation)</label>
-                <select class="input-field" name="image_model" id="imageModelSelect">
+                <label class="input-label" for="imageModelSelect">图片生成模型 (Image Generation)</label>
+                <select class="input-field" name="image_model" id="imageModelSelect" autocomplete="off">
                     <option value="gemini-2.5-flash-image-preview">gemini-2.5-flash-image-preview</option>
                     <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
                 </select>
@@ -520,9 +529,9 @@
                 </div>
 
                 <div class="share-link-section" id="shareLinkSection">
-                    <label class="input-label">公开链接</label>
+                    <label class="input-label" for="shareLinkInput">公开链接</label>
                     <div class="share-link-wrapper">
-                        <input type="text" class="input-field font-mono share-link-input" id="shareLinkInput" readonly>
+                        <input type="text" class="input-field font-mono share-link-input" id="shareLinkInput" readonly autocomplete="off">
                         <button class="btn-copy-link" id="btnCopyLink" title="复制链接">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="3" y="7" width="10" height="8" rx="1"/>

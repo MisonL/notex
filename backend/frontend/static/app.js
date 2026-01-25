@@ -1239,6 +1239,16 @@ class OpenNotebook {
                 this.updateFooter();
             }
 
+            // 如果没有登录，不获取统计信息
+            if (!this.token) {
+                if (!cached) {
+                    this.notebooks = [];
+                    this.renderNotebooks();
+                    this.updateFooter();
+                }
+                return;
+            }
+
             // 从服务器获取最新数据（包含统计信息）
             const notebooks = await this.api("/notebooks/stats");
             this.notebooks = notebooks;

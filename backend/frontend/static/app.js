@@ -122,32 +122,24 @@ class LocalCache {
 }
 
 class OpenNotebook {
-<<<<<<< HEAD
   constructor() {
     this.notebooks = [];
     this.currentNotebook = null;
     this.apiBase = "/api";
     this.currentChatSession = null;
+    this.currentPublicToken = null;
     this.config = {
       allowDelete: true,
     };
-=======
-    constructor() {
-        this.notebooks = [];
-        this.currentNotebook = null;
-        this.apiBase = '/api';
-        this.currentChatSession = null;
-        this.currentPublicToken = null;
 
-        // Auth state
-        this.token = localStorage.getItem('token');
-        this.currentUser = null;
+    // Auth state
+    this.token = localStorage.getItem("token");
+    this.currentUser = null;
 
-        // Sync token from localStorage to cookie for image loading
-        if (this.token) {
-            document.cookie = `token=${this.token}; path=/; SameSite=Lax`;
-        }
->>>>>>> origin/master
+    // Sync token from localStorage to cookie for image loading
+    if (this.token) {
+      document.cookie = `token=${this.token}; path=/; SameSite=Lax`;
+    }
 
     // 初始化本地缓存 (5分钟TTL)
     this.cache = new LocalCache(5);
@@ -172,16 +164,24 @@ class OpenNotebook {
   }
 
   async init() {
+    await this.initAuth();
     await this.loadConfig();
     this.bindEvents();
     this.initResizers();
-    this.switchView("landing");
+    this.initNotebookNameEditor();
 
     // 清理过期缓存
     this.cache.cleanup();
 
-    await this.loadNotebooks();
-    this.applyConfig();
+    // Check if URL contains /notes/:id or /public/:token for direct notebook access
+    // Only load notebooks if not accessing a public notebook directly
+    if (!this.checkURLForNotebook() && !this.checkURLForPublicNotebook()) {
+      await this.loadNotebooks();
+      this.applyConfig();
+      this.switchView("landing");
+    } else {
+      this.applyConfig();
+    }
   }
 
   async loadConfig() {
@@ -200,7 +200,6 @@ class OpenNotebook {
     }
   }
 
-<<<<<<< HEAD
   applyConfig() {
     // Show/hide delete buttons based on allowDelete config
     const deleteButtons = document.querySelectorAll(
@@ -215,21 +214,12 @@ class OpenNotebook {
       }
     });
   }
-=======
-    async init() {
-        await this.initAuth();
-        await this.loadConfig();
-        this.bindEvents();
-        this.initResizers();
-        this.initNotebookNameEditor();
->>>>>>> origin/master
 
   initResizers() {
     const resizerLeft = document.getElementById("resizerLeft");
     const resizerRight = document.getElementById("resizerRight");
     const grid = document.querySelector(".main-grid");
 
-<<<<<<< HEAD
     if (!resizerLeft || !resizerRight) return;
 
     let isDragging = false;
@@ -259,16 +249,6 @@ class OpenNotebook {
         const width = e.clientX - gridRect.left;
         if (width > 150 && width < 600) {
           grid.style.setProperty("--left-width", `${width}px`);
-=======
-        // Check if URL contains /notes/:id or /public/:token for direct notebook access
-        // Only load notebooks if not accessing a public notebook directly
-        if (!this.checkURLForNotebook() && !this.checkURLForPublicNotebook()) {
-            await this.loadNotebooks();
-            this.applyConfig();
-            this.switchView('landing');
-        } else {
-            this.applyConfig();
->>>>>>> origin/master
         }
       } else if (currentResizer === resizerRight) {
         const width = gridRect.right - e.clientX;
@@ -301,7 +281,7 @@ class OpenNotebook {
       this.showNewNotebookModal()
     );
     safeAddEventListener("btnBackToList", "click", () =>
-      this.switchView("landing")
+      this.handleBackToList()
     );
     safeAddEventListener("btnToggleRight", "click", () =>
       this.toggleRightPanel()
@@ -320,6 +300,23 @@ class OpenNotebook {
       e.stopPropagation();
       this.closeNoteTab();
     });
+
+    // Share listeners
+    safeAddEventListener('btnShareNotebook', 'click', () => {
+        if (this.currentNotebook) {
+            this.showShareDialog(this.currentNotebook);
+        }
+    });
+    safeAddEventListener('btnCloseShareModal', 'click', () => this.closeShareModal());
+    safeAddEventListener('btnCancelShare', 'click', () => this.closeShareModal());
+    safeAddEventListener('btnCopyLink', 'click', () => this.copyShareLink());
+    safeAddEventListener('btnToggleShare', 'click', () => this.toggleShareFromModal());
+
+    // Auth events
+    safeAddEventListener('btnLogin', 'click', () => this.handleLogin());
+    safeAddEventListener('btnLogout', 'click', () => this.handleLogout());
+    safeAddEventListener('btnLoginWorkspace', 'click', () => this.handleLogin());
+    safeAddEventListener('btnLogoutWorkspace', 'click', () => this.handleLogout());
 
     // Panel tabs
     document.querySelectorAll(".tab-btn").forEach((tab) => {
@@ -359,7 +356,6 @@ class OpenNotebook {
       dropZone.addEventListener("drop", (e) => this.handleDrop(e));
     }
 
-<<<<<<< HEAD
     safeAddEventListener("fileInput", "change", (e) =>
       this.handleFileUpload(e)
     );
@@ -430,6 +426,21 @@ class OpenNotebook {
     if (embeddingProviderSelect) {
       embeddingProviderSelect.addEventListener('change', () => this.updateEmbeddingModelVisibility());
     }
+
+    // Popstate
+    window.addEventListener('popstate', (event) => {
+        const path = window.location.pathname;
+        const match = path.match(/^\/notes\/([a-f0-9-]+)$/);
+        if (match) {
+            const notebookId = match[1];
+            const notebook = this.notebooks.find(nb => nb.id === notebookId);
+            if (notebook && (!this.currentNotebook || this.currentNotebook.id !== notebookId)) {
+                this.selectNotebook(notebookId);
+            }
+        } else if (path === '/' && this.currentNotebook) {
+            this.switchView('landing');
+        }
+    });
   }
 
   async updateChatModelVisibility() {
@@ -480,7 +491,49 @@ class OpenNotebook {
     try {
         const res = await this.api(`/models?provider=${provider}&type=${type}`);
         const models = res.models || [];
-=======
+
+        select.innerHTML = '';
+        let foundCurrent = false;
+
+        models.forEach(modelItem => {
+            const opt = document.createElement('option');
+            const id = typeof modelItem === 'string' ? modelItem : modelItem.id;
+            const name = typeof modelItem === 'string' ? modelItem : modelItem.display_name;
+            
+            opt.value = id;
+            opt.textContent = name;
+            if (id === currentVal) {
+                opt.selected = true;
+                foundCurrent = true;
+            }
+            select.appendChild(opt);
+
+            if (id === currentVal) foundCurrent = true;
+        });
+
+        // If configured model is in list, select it
+        if (foundCurrent) {
+            select.value = currentVal;
+        } else if (configProvider === provider && configModel) {
+             const exists = models.some(m => {
+                  const id = typeof m === 'string' ? m : m.id;
+                  return id === configModel;
+             });
+             if (!exists) {
+                  const opt = document.createElement('option');
+                  opt.value = configModel;
+                  opt.textContent = configModel;
+                  select.insertBefore(opt, select.firstChild);
+                  select.value = configModel;
+             }
+        }
+    } catch (e) {
+        console.error("Failed to load models:", e);
+        if (select.options.length === 0 || select.options[0].text === 'Loading...') {
+             select.innerHTML = '<option value="">Failed to load models</option>';
+        }
+    }
+  }
     // Check if URL contains /public/:token and load the public notebook
     checkURLForPublicNotebook() {
         const path = window.location.pathname;
@@ -700,126 +753,185 @@ class OpenNotebook {
         document.addEventListener('mouseup', stopDragging);
     }
 
-    bindEvents() {
-        const safeAddEventListener = (id, event, handler) => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener(event, handler);
-        };
+  bindEvents() {
+    const safeAddEventListener = (id, event, handler) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener(event, handler);
+    };
 
-        safeAddEventListener('btnNewNotebook', 'click', () => this.showNewNotebookModal());
-        safeAddEventListener('btnNewNotebookLanding', 'click', () => this.showNewNotebookModal());
-        safeAddEventListener('btnShareNotebook', 'click', () => {
-            if (this.currentNotebook) {
-                this.showShareDialog(this.currentNotebook);
-            }
-        });
+    safeAddEventListener("btnNewNotebook", "click", () =>
+      this.showNewNotebookModal()
+    );
+    safeAddEventListener("btnNewNotebookLanding", "click", () =>
+      this.showNewNotebookModal()
+    );
+    safeAddEventListener("btnBackToList", "click", () =>
+      this.handleBackToList()
+    );
+    safeAddEventListener("btnToggleRight", "click", () =>
+      this.toggleRightPanel()
+    );
+    safeAddEventListener("btnToggleLeft", "click", () =>
+      this.toggleLeftPanel()
+    );
+    safeAddEventListener("btnShowNotesDetails", "click", () =>
+      this.showNotesListTab()
+    );
+    safeAddEventListener("btnCloseNotesList", "click", (e) => {
+      e.stopPropagation();
+      this.closeNotesListTab();
+    });
+    safeAddEventListener("btnCloseNote", "click", (e) => {
+      e.stopPropagation();
+      this.closeNoteTab();
+    });
+    safeAddEventListener('btnShareNotebook', 'click', () => {
+        if (this.currentNotebook) {
+            this.showShareDialog(this.currentNotebook);
+        }
+    });
 
-        // Share modal events
-        safeAddEventListener('btnCloseShareModal', 'click', () => this.closeShareModal());
-        safeAddEventListener('btnCancelShare', 'click', () => this.closeShareModal());
-        safeAddEventListener('btnCopyLink', 'click', () => this.copyShareLink());
-        safeAddEventListener('btnToggleShare', 'click', () => this.toggleShareFromModal());
+    // Share modal events
+    safeAddEventListener('btnCloseShareModal', 'click', () => this.closeShareModal());
+    safeAddEventListener('btnCancelShare', 'click', () => this.closeShareModal());
+    safeAddEventListener('btnCopyLink', 'click', () => this.copyShareLink());
+    safeAddEventListener('btnToggleShare', 'click', () => this.toggleShareFromModal());
 
-        // Auth events
-        safeAddEventListener('btnLogin', 'click', () => this.handleLogin());
-        safeAddEventListener('btnLogout', 'click', () => this.handleLogout());
-        safeAddEventListener('btnLoginWorkspace', 'click', () => this.handleLogin());
-        safeAddEventListener('btnLogoutWorkspace', 'click', () => this.handleLogout());
+    // Auth events
+    safeAddEventListener('btnLogin', 'click', () => this.handleLogin());
+    safeAddEventListener('btnLogout', 'click', () => this.handleLogout());
+    safeAddEventListener('btnLoginWorkspace', 'click', () => this.handleLogin());
+    safeAddEventListener('btnLogoutWorkspace', 'click', () => this.handleLogout());
 
-        safeAddEventListener('btnBackToList', 'click', () => this.handleBackToList());
-        safeAddEventListener('btnToggleRight', 'click', () => this.toggleRightPanel());
-        safeAddEventListener('btnToggleLeft', 'click', () => this.toggleLeftPanel());
-        safeAddEventListener('btnShowNotesDetails', 'click', () => this.showNotesListTab());
-        safeAddEventListener('btnCloseNotesList', 'click', (e) => {
-            e.stopPropagation();
-            this.closeNotesListTab();
-        });
-        safeAddEventListener('btnCloseNote', 'click', (e) => {
-            e.stopPropagation();
-            this.closeNoteTab();
-        });
+    // Panel tabs
+    document.querySelectorAll(".tab-btn").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        this.switchPanelTab(tab.dataset.tab);
+      });
+    });
 
-        // Panel tabs
-        document.querySelectorAll('.tab-btn').forEach(tab => {
-            tab.addEventListener('click', () => {
-                this.switchPanelTab(tab.dataset.tab);
-            });
-        });
->>>>>>> origin/master
-        
-        select.innerHTML = '';
-        let foundCurrent = false;
+    safeAddEventListener("newNotebookForm", "submit", (e) =>
+      this.handleCreateNotebook(e)
+    );
+    safeAddEventListener("btnCloseNotebookModal", "click", () =>
+      this.closeModals()
+    );
+    safeAddEventListener("btnCancelNotebook", "click", () =>
+      this.closeModals()
+    );
 
-        models.forEach(modelItem => {
-            const opt = document.createElement('option');
-            // Check if modelItem is string (legacy) or object (new)
-            const id = typeof modelItem === 'string' ? modelItem : modelItem.id;
-            const name = typeof modelItem === 'string' ? modelItem : modelItem.display_name;
-            
-            opt.value = id;
-            opt.textContent = name;
-            if (id === currentVal) {
-                opt.selected = true;
-                foundCurrent = true;
-            }
-        document.querySelectorAll('.transform-card').forEach(card => {
-            card.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.handleTransform(card.dataset.type, card);
-            });
-        });
-
-<<<<<<< Updated upstream
-        safeAddEventListener('btnCustomTransform', 'click', (e) => {
-            this.handleTransform('custom', e.currentTarget);
-        });
-
-        safeAddEventListener('chatForm', 'submit', (e) => this.handleChat(e));
-
-        safeAddEventListener('modalOverlay', 'click', (e) => {
-            if (e.target.id === 'modalOverlay') {
-                this.closeModals();
-            }
-        });
-
-        // Handle browser back/forward buttons
-        window.addEventListener('popstate', (event) => {
-            const path = window.location.pathname;
-            const match = path.match(/^\/notes\/([a-f0-9-]+)$/);
-            if (match) {
-                const notebookId = match[1];
-                const notebook = this.notebooks.find(nb => nb.id === notebookId);
-                if (notebook && !this.currentNotebook) {
-                    this.selectNotebook(notebookId);
-                }
-            } else if (path === '/' && this.currentNotebook) {
-                this.switchView('landing');
-            }
-        });
+    safeAddEventListener("btnAddSource", "click", () =>
+      this.showAddSourceModal()
+    );
+    safeAddEventListener("btnCloseSourceModal", "click", () =>
+      this.closeModals()
+    );
+    const dropZone = document.getElementById("dropZone");
+    if (dropZone) {
+      dropZone.addEventListener("click", () =>
+        document.getElementById("fileInput").click()
+      );
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("drag-over");
+      });
+      dropZone.addEventListener("dragleave", () => {
+        dropZone.classList.remove("drag-over");
+      });
+      dropZone.addEventListener("drop", (e) => this.handleDrop(e));
     }
 
-    // Auth Methods
+    safeAddEventListener("fileInput", "change", (e) =>
+      this.handleFileUpload(e)
+    );
+    safeAddEventListener("textSourceForm", "submit", (e) =>
+      this.handleTextSource(e)
+    );
+    safeAddEventListener("urlSourceForm", "submit", (e) =>
+      this.handleURLSource(e)
+    );
+    safeAddEventListener("btnCancelText", "click", () => this.closeModals());
+    safeAddEventListener("btnCancelURL", "click", () => this.closeModals());
+
+    document.querySelectorAll(".source-tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document
+          .querySelectorAll(".source-tab")
+          .forEach((t) => t.classList.remove("active"));
+        document
+          .querySelectorAll(".source-content")
+          .forEach((c) => c.classList.remove("active"));
+        tab.classList.add("active");
+        const targetId = `source${
+          tab.dataset.source.charAt(0).toUpperCase() +
+          tab.dataset.source.slice(1)
+        }`;
+        const target = document.getElementById(targetId);
+        if (target) target.classList.add("active");
+      });
+    });
+
+    document.querySelectorAll(".transform-card").forEach((card) => {
+      card.addEventListener("click", (e) => {
+        e.preventDefault();
+        this.handleTransform(card.dataset.type, card);
+      });
+    });
+
+    safeAddEventListener("btnCustomTransform", "click", (e) => {
+      this.handleTransform("custom", e.currentTarget);
+    });
+
+    safeAddEventListener("chatForm", "submit", (e) => this.handleChat(e));
+
+    safeAddEventListener("modalOverlay", "click", (e) => {
+      if (e.target.id === "modalOverlay") {
+        this.closeModals();
+      }
+    });
+
+    safeAddEventListener("btnSettings", "click", () =>
+      this.showSettingsModal()
+    );
+    safeAddEventListener("btnCloseSettingsModal", "click", () =>
+      this.closeModals()
+    );
+    safeAddEventListener("btnCancelSettings", "click", () =>
+      this.closeModals()
+    );
+    safeAddEventListener("settingsForm", "submit", (e) =>
+      this.handleSaveSettings(e)
+    );
+
+    const chatProviderSelect = document.getElementById('chatProviderSelect');
+    if (chatProviderSelect) {
+      chatProviderSelect.addEventListener('change', () => this.updateChatModelVisibility());
+    }
+    const embeddingProviderSelect = document.getElementById('embeddingProviderSelect');
+    if (embeddingProviderSelect) {
+      embeddingProviderSelect.addEventListener('change', () => this.updateEmbeddingModelVisibility());
+    }
+
+    // Handle browser back/forward buttons
+    window.addEventListener('popstate', (event) => {
+        const path = window.location.pathname;
+        const match = path.match(/^\/notes\/([a-f0-9-]+)$/);
+        if (match) {
+            const notebookId = match[1];
+            const notebook = this.notebooks.find(nb => nb.id === notebookId);
+            if (notebook && (!this.currentNotebook || this.currentNotebook.id !== notebookId)) {
+                this.selectNotebook(notebookId);
+            }
+        } else if (path === '/' && this.currentNotebook) {
+            this.switchView('landing');
+        }
+    });
+  }
+
     async initAuth() {
         if (!this.token) {
             this.updateAuthUI();
             return;
-=======
-        // If configured model is in list, select it
-        if (foundCurrent) {
-            select.value = currentVal;
-        } else if (configProvider === provider && configModel) {
-             const exists = models.some(m => {
-                  const id = typeof m === 'string' ? m : m.id;
-                  return id === configModel;
-             });
-             if (!exists) {
-                  const opt = document.createElement('option');
-                  opt.value = configModel;
-                  opt.textContent = configModel;
-                  select.insertBefore(opt, select.firstChild);
-                  select.value = configModel;
-             }
->>>>>>> Stashed changes
         }
 
         try {
@@ -1302,23 +1414,7 @@ class OpenNotebook {
             landing.classList.remove('hidden');
             workspace.classList.add('hidden');
             header.classList.remove('hidden');
-            this.currentNotebook = null;
-            this.renderNotebookCards();
-            // Update URL to root when returning to landing page
-            window.history.pushState({}, '', '/');
->>>>>>> origin/master
         }
-      });
-
-      // Apply config to delete button
-      if (this.config.allowDelete) {
-        deleteCardBtn.style.display = "flex";
-      } else {
-        deleteCardBtn.style.display = "none";
-      }
-
-      container.appendChild(clone);
-    });
   }
 
   switchView(view) {
@@ -1421,35 +1517,8 @@ class OpenNotebook {
     this.switchPanelTab("chat");
   }
 
-<<<<<<< HEAD
   async renderNotesCompactGrid() {
     if (!this.currentNotebook) return;
-=======
-        if (tab === 'note') {
-            chatWrapper.style.display = 'none';
-            if (notesDetailsView) notesDetailsView.style.display = 'none';
-            if (noteViewContainer) {
-                noteViewContainer.style.display = 'flex';
-            }
-        } else if (tab === 'chat') {
-            chatWrapper.style.display = 'flex';
-            if (notesDetailsView) notesDetailsView.style.display = 'none';
-            if (noteViewContainer) {
-                noteViewContainer.style.display = 'none';
-            }
-        } else if (tab === 'notes_list') {
-            chatWrapper.style.display = 'none';
-            if (noteViewContainer) noteViewContainer.style.display = 'none';
-            if (notesDetailsView) {
-                notesDetailsView.style.display = 'flex';
-                // Only render if not in public mode (public mode already has data loaded)
-                if (!this.currentPublicToken) {
-                    this.renderNotesCompactGrid();
-                }
-            }
-        }
-    }
->>>>>>> origin/master
 
     const container = document.querySelector(".notes-compact-grid");
     if (!container) return;
@@ -1472,44 +1541,7 @@ class OpenNotebook {
           .replace(/\n+/g, " ")
           .trim();
 
-<<<<<<< HEAD
         card.innerHTML = `
-=======
-    closeNoteTab() {
-        const noteViewContainer = document.querySelector('.note-view-container');
-        if (noteViewContainer) noteViewContainer.remove();
-        
-        const tabBtnNote = document.getElementById('tabBtnNote');
-        if (tabBtnNote) tabBtnNote.style.display = 'none';
-
-        this.switchPanelTab('chat');
-    }
-
-    async renderNotesCompactGrid() {
-        if (!this.currentNotebook) return;
-
-        const container = document.querySelector('.notes-compact-grid');
-        if (!container) return;
-
-        try {
-            const notes = await this.api(`/notebooks/${this.currentNotebook.id}/notes`);
-            container.innerHTML = '';
-
-            notes.forEach(note => {
-                const card = document.createElement('div');
-                card.className = 'compact-note-card';
-                card.dataset.noteId = note.id;
-
-                const plainText = note.content
-                    .replace(/^#+\s+/gm, '')
-                    .replace(/\*\*/g, '')
-                    .replace(/\*/g, '')
-                    .replace(/`/g, '')
-                    .replace(/\n+/g, ' ')
-                    .trim();
-
-                card.innerHTML = `
->>>>>>> origin/master
                     <button class="btn-delete-compact-note" title="删除笔记">
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M4.5 4.5L9.5 9.5M9.5 4.5L4.5 9.5"/>
@@ -1533,19 +1565,11 @@ class OpenNotebook {
           }
         });
 
-<<<<<<< HEAD
         // Apply config to delete button
         if (this.config.allowDelete) {
           deleteBtn.style.display = "flex";
         } else {
           deleteBtn.style.display = "none";
-=======
-                card.addEventListener('click', () => this.viewNote(note));
-                container.appendChild(card);
-            });
-        } catch (error) {
-            console.error('Failed to load notes for grid:', error);
->>>>>>> origin/master
         }
 
         card.addEventListener("click", () => this.viewNote(note));
@@ -1556,10 +1580,6 @@ class OpenNotebook {
     }
   }
 
-<<<<<<< HEAD
-  async selectNotebook(id) {
-    this.currentNotebook = this.notebooks.find((nb) => nb.id === id);
-=======
     // Render notes compact grid for public notebooks (without API call)
     async renderNotesCompactGridPublic(notes) {
         const container = document.querySelector('.notes-compact-grid');
@@ -1614,44 +1634,45 @@ class OpenNotebook {
         this.showNotesListTab();
         const noteView = document.querySelector('.note-view-container');
         if (noteView) noteView.remove();
->>>>>>> origin/master
 
-    document.getElementById("currentNotebookName").textContent =
-      this.currentNotebook.name;
-    this.switchView("workspace");
+        await Promise.all([
+          this.loadSources(),
+          this.loadNotes(),
+          this.loadChatSessions(),
+        ]);
 
-    // Reset tab to notes list and remove any existing note view
-    this.showNotesListTab();
-    const noteView = document.querySelector(".note-view-container");
-    if (noteView) noteView.remove();
-
-    await Promise.all([
-      this.loadSources(),
-      this.loadNotes(),
-      this.loadChatSessions(),
-    ]);
-
-    this.setStatus(`当前选择: ${this.currentNotebook.name}`);
-  }
-
-  showNewNotebookModal() {
-    document.getElementById("newNotebookModal").classList.add("active");
-    document.getElementById("modalOverlay").classList.add("active");
-    document.querySelector('#newNotebookForm input[name="name"]').focus();
-  }
-
-  async showSettingsModal() {
-    const modal = document.getElementById('settingsModal');
-    const selectEmbedding = document.getElementById('embeddingProviderSelect');
-    const selectImage = document.getElementById('imageModelSelect');
-    
-    if (this.config.embeddingProvider) {
-        selectEmbedding.value = this.config.embeddingProvider;
+        this.setStatus(`当前选择: ${this.currentNotebook.name}`);
     }
-<<<<<<< HEAD
-    if (this.config.imageModel) {
-        selectImage.value = this.config.imageModel;
-=======
+
+    showNewNotebookModal() {
+        document.getElementById("newNotebookModal").classList.add("active");
+        document.getElementById("modalOverlay").classList.add("active");
+        document.querySelector('#newNotebookForm input[name="name"]').focus();
+    }
+
+    async showSettingsModal() {
+        const modal = document.getElementById('settingsModal');
+        const selectEmbedding = document.getElementById('embeddingProviderSelect');
+        const selectImage = document.getElementById('imageModelSelect');
+        
+        if (this.config.embeddingProvider) {
+            selectEmbedding.value = this.config.embeddingProvider;
+        }
+        if (this.config.imageModel) {
+            selectImage.value = this.config.imageModel;
+        }
+        if (this.config.chatProvider) {
+            document.getElementById('chatProviderSelect').value = this.config.chatProvider;
+        }
+        
+        // Set appropriate chat model based on provider (and load models)
+        await this.updateChatModelVisibility();
+        // Load embedding models
+        await this.updateEmbeddingModelVisibility();
+        
+        modal.classList.add('active');
+        document.getElementById('modalOverlay').classList.add('active');
+    }
 
     // 更新分享按钮状态
     updateShareButtonState() {
@@ -1879,25 +1900,6 @@ class OpenNotebook {
         nameEditor.classList.add('hidden');
     }
 
-    showNewNotebookModal() {
-        document.getElementById('newNotebookModal').classList.add('active');
-        document.getElementById('modalOverlay').classList.add('active');
-        document.querySelector('#newNotebookForm input[name="name"]').focus();
->>>>>>> origin/master
-    }
-    if (this.config.chatProvider) {
-        document.getElementById('chatProviderSelect').value = this.config.chatProvider;
-    }
-    
-    // Set appropriate chat model based on provider (and load models)
-    await this.updateChatModelVisibility();
-    // Load embedding models
-    await this.updateEmbeddingModelVisibility();
-    
-    modal.classList.add('active');
-    document.getElementById('modalOverlay').classList.add('active');
-  }
-
   async handleSaveSettings(e) {
     e.preventDefault();
     const form = e.target;
@@ -2082,164 +2084,10 @@ class OpenNotebook {
           this.removeSource(source.id);
         });
 
-<<<<<<< HEAD
-        // Apply config to delete button
         if (this.config.allowDelete) {
           removeBtn.style.display = "flex";
         } else {
           removeBtn.style.display = "none";
-=======
-                container.appendChild(clone);
-            });
-
-            this.updateFooter();
-        } catch (error) {
-            console.error('加载来源失败:', error);
-        }
-    }
-
-    getSourceIcon(type) {
-        const icons = {
-            file: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 4 L24 4 L30 10 L30 36 L10 36 Z"/><polyline points="24,4 24,10 30,10"/></svg>',
-            text: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 6 L32 6"/><path d="M8 12 L32 12"/><path d="M8 18 L28 18"/><path d="M8 24 L32 24"/><path d="M8 30 L24 30"/></svg>',
-            url: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20 C12 14 16 10 22 10 C28 10 32 14 32 20 C32 26 28 30 22 30"/><path d="M28 20 C28 26 24 30 18 30 C12 30 8 26 8 20 C8 14 12 10 18 10"/></svg>',
-            insight: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="20" cy="20" r="14"/><path d="M20 12 L20 22"/><path d="M20 26 L20 28"/><circle cx="20" cy="20" r="8" stroke-dasharray="2 2"/></svg>',
-        };
-        return icons[type] || icons.file;
-    }
-
-    formatFileSize(bytes) {
-        if (!bytes) return null;
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    }
-
-    // Render sources from data (for public notebooks)
-    async renderSourcesList(sources) {
-        const container = document.getElementById('sourcesGrid');
-        const template = document.getElementById('sourceTemplate');
-
-        if (!container || !template) return;
-
-        container.innerHTML = '';
-
-        if (sources.length === 0) {
-            this.clearContentAreas();
-            return;
-        }
-
-        sources.forEach(source => {
-            const clone = template.content.cloneNode(true);
-            const card = clone.querySelector('.source-card');
-
-            card.dataset.id = source.id;
-            card.querySelector('.source-type-badge').textContent = source.type;
-            card.querySelector('.source-name').textContent = source.name;
-            card.querySelector('.source-meta').textContent = this.formatFileSize(source.file_size) || '文本来源';
-            card.querySelector('.chunk-count').textContent = source.chunk_count || 0;
-
-            const icon = this.getSourceIcon(source.type);
-            card.querySelector('.source-icon').innerHTML = icon;
-
-            // Remove delete button for public notebooks
-            const removeBtn = card.querySelector('.btn-remove-source');
-            if (removeBtn) {
-                removeBtn.style.display = 'none';
-            }
-
-            container.appendChild(clone);
-        });
-
-        this.updateFooter();
-    }
-
-    // Render notes from data (for public notebooks)
-    async renderNotesList(notes) {
-        const container = document.getElementById('notesList');
-        const template = document.getElementById('noteTemplate');
-
-        if (!container || !template) return;
-
-        container.innerHTML = '';
-
-        if (notes.length === 0) {
-            return;
-        }
-
-        notes.forEach(note => {
-            const clone = template.content.cloneNode(true);
-            const item = clone.querySelector('.note-item');
-
-            item.dataset.id = note.id;
-            item.querySelector('.note-type-badge').textContent = this.noteTypeNameMap[note.type] || note.type.toUpperCase();
-            item.querySelector('.note-title').textContent = note.title;
-
-            const plainText = note.content
-                .replace(/^#+\s+/gm, '')
-                .replace(/\*\*/g, '')
-                .replace(/\*/g, '')
-                .replace(/`/g, '')
-                .replace(/\ \[([^\]]+)\]\([^)]+\)/g, '$1')
-                .replace(/\n+/g, ' ')
-                .trim();
-
-            item.querySelector('.note-preview').textContent = plainText;
-            item.querySelector('.note-date').textContent = this.formatDate(note.created_at);
-            item.querySelector('.note-sources').textContent = `${note.source_ids?.length || 0} 来源`;
-
-            // Remove delete button for public notebooks
-            const deleteBtn = item.querySelector('.btn-delete-note');
-            if (deleteBtn) {
-                deleteBtn.style.display = 'none';
-            }
-
-            item.addEventListener('click', (e) => {
-                if (!e.target.closest('.btn-delete-note')) {
-                    this.viewNote(note);
-                }
-            });
-
-            container.appendChild(clone);
-        });
-
-        this.updateFooter();
-    }
-
-    showAddSourceModal() {
-        if (!this.currentNotebook) {
-            this.showError('请先选择一个笔记本');
-            return;
-        }
-        document.getElementById('addSourceModal').classList.add('active');
-        document.getElementById('modalOverlay').classList.add('active');
-    }
-
-    async handleFileUpload(e) {
-        const files = e.target.files;
-        if (!files.length) return;
-
-        if (!this.currentNotebook) {
-            this.showError('请先选择一个笔记本');
-            return;
-        }
-
-        this.showLoading('处理中...');
-
-        for (const file of files) {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('notebook_id', this.currentNotebook.id);
-
-            try {
-                await this.api('/upload', {
-                    method: 'POST',
-                    body: formData,
-                });
-            } catch (error) {
-                this.showError(`上传失败: ${file.name} - ${error.message}`);
-            }
->>>>>>> origin/master
         }
 
         container.appendChild(clone);
@@ -2251,62 +2099,94 @@ class OpenNotebook {
     }
   }
 
-  getSourceIcon(type) {
-    const icons = {
-      file: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 4 L24 4 L30 10 L30 36 L10 36 Z"/><polyline points="24,4 24,10 30,10"/></svg>',
-      text: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 6 L32 6"/><path d="M8 12 L32 12"/><path d="M8 18 L28 18"/><path d="M8 24 L32 24"/><path d="M8 30 L24 30"/></svg>',
-      url: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20 C12 14 16 10 22 10 C28 10 32 14 32 20 C32 26 28 30 22 30"/><path d="M28 20 C28 26 24 30 18 30 C12 30 8 26 8 20 C8 14 12 10 18 10"/></svg>',
-      insight:
-        '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="20" cy="20" r="14"/><path d="M20 12 L20 22"/><path d="M20 26 L20 28"/><circle cx="20" cy="20" r="8" stroke-dasharray="2 2"/></svg>',
-    };
-    return icons[type] || icons.file;
-  }
+  // Render sources from data (for public notebooks)
+  async renderSourcesList(sources) {
+    const container = document.getElementById('sourcesGrid');
+    const template = document.getElementById('sourceTemplate');
 
-  formatFileSize(bytes) {
-    if (!bytes) return null;
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-  }
+    if (!container || !template) return;
 
-  showAddSourceModal() {
-    if (!this.currentNotebook) {
-      this.showError("请先选择一个笔记本");
-      return;
+    container.innerHTML = '';
+
+    if (sources.length === 0) {
+        this.clearContentAreas();
+        return;
     }
-    document.getElementById("addSourceModal").classList.add("active");
-    document.getElementById("modalOverlay").classList.add("active");
+
+    sources.forEach(source => {
+        const clone = template.content.cloneNode(true);
+        const card = clone.querySelector('.source-card');
+
+        card.dataset.id = source.id;
+        card.querySelector('.source-type-badge').textContent = source.type;
+        card.querySelector('.source-name').textContent = source.name;
+        card.querySelector('.source-meta').textContent = this.formatFileSize(source.file_size) || '文本来源';
+        card.querySelector('.chunk-count').textContent = source.chunk_count || 0;
+
+        const icon = this.getSourceIcon(source.type);
+        card.querySelector('.source-icon').innerHTML = icon;
+
+        const removeBtn = card.querySelector('.btn-remove-source');
+        if (removeBtn) {
+            removeBtn.style.display = 'none';
+        }
+
+        container.appendChild(clone);
+    });
+
+    this.updateFooter();
   }
 
-  async handleFileUpload(e) {
-    const files = e.target.files;
-    if (!files.length) return;
+  // Render notes from data (for public notebooks)
+  async renderNotesList(notes) {
+    const container = document.getElementById('notesList');
+    const template = document.getElementById('noteTemplate');
 
-    this.showLoading("处理中...");
+    if (!container || !template) return;
 
-    for (const file of files) {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("notebook_id", this.currentNotebook.id);
+    container.innerHTML = '';
 
-      try {
-        await this.api("/upload", {
-          method: "POST",
-          headers: {},
-          body: formData,
+    if (notes.length === 0) {
+        return;
+    }
+
+    notes.forEach(note => {
+        const clone = template.content.cloneNode(true);
+        const item = clone.querySelector('.note-item');
+
+        item.dataset.id = note.id;
+        item.querySelector('.note-type-badge').textContent = this.noteTypeNameMap[note.type] || note.type.toUpperCase();
+        item.querySelector('.note-title').textContent = note.title;
+
+        const plainText = note.content
+            .replace(/^#+\s+/gm, '')
+            .replace(/\*\*/g, '')
+            .replace(/\*/g, '')
+            .replace(/`/g, '')
+            .replace(/\ \[([^\]]+)\]\([^)]+\)/g, '$1')
+            .replace(/\n+/g, ' ')
+            .trim();
+
+        item.querySelector('.note-preview').textContent = plainText;
+        item.querySelector('.note-date').textContent = this.formatDate(note.created_at);
+        item.querySelector('.note-sources').textContent = `${note.source_ids?.length || 0} 来源`;
+
+        const deleteBtn = item.querySelector('.btn-delete-note');
+        if (deleteBtn) {
+            deleteBtn.style.display = 'none';
+        }
+
+        item.addEventListener('click', (e) => {
+            if (!e.target.closest('.btn-delete-note')) {
+                this.viewNote(note);
+            }
         });
-      } catch (error) {
-        this.showError(`上传失败: ${file.name} - ${error.message}`);
-      }
-    }
 
-    this.hideLoading();
-    this.closeModals();
-    await this.loadSources();
-    await this.updateCurrentNotebookCounts();
-    document.getElementById("fileInput").value = "";
+        container.appendChild(clone);
+    });
+
+    this.updateFooter();
   }
-
   async handleTextSource(e) {
     e.preventDefault();
     const form = e.target;
@@ -2458,29 +2338,12 @@ class OpenNotebook {
           this.deleteNote(note.id);
         });
 
-<<<<<<< HEAD
-        // Apply config to delete button
         if (this.config.allowDelete) {
           deleteBtn.style.display = "flex";
         } else {
           deleteBtn.style.display = "none";
-=======
-                item.addEventListener('click', (e) => {
-                    if (!e.target.closest('.btn-delete-note')) {
-                        this.viewNote(note);
-                    }
-                });
-
-                container.appendChild(clone);
-            });
-
-            this.updateFooter();
-        } catch (error) {
-            console.error('加载笔记失败:', error);
->>>>>>> origin/master
         }
 
-<<<<<<< HEAD
         item.addEventListener("click", (e) => {
           if (!e.target.closest(".btn-delete-note")) {
             this.viewNote(note);
@@ -2496,74 +2359,83 @@ class OpenNotebook {
     }
   }
 
+  // Helper to rewrite image URLs for public notebooks
+  rewriteImageUrlsForPublic(content) {
+    if (!this.currentPublicToken) {
+      return content;
+    }
+    // Regex to find image URLs in markdown: ![alt](url) or <img src="url">
+    // And also direct URLs that might be in metadata
+    return content.replace(
+      /(src="|!\[.*?\]\()(\/api\/notebooks\/.*?\/files\/.*?)"/g,
+      `$1/public/${this.currentPublicToken}$2"`
+    );
+  }
+
   async viewNote(note) {
-    const renderedContent = marked.parse(note.content);
-    const infographicHTML = note.metadata?.image_url
-      ? `<div class="infographic-container">
-                 <img src="${note.metadata.image_url}" alt="Infographic" class="infographic-image">
-=======
-    async viewNote(note) {
-        // Debug: log note metadata
-        console.log('viewNote - metadata:', note.metadata);
-        console.log('viewNote - image_url:', note.metadata?.image_url);
-        console.log('viewNote - currentPublicToken:', this.currentPublicToken);
+    // Debug: log note metadata
+    console.log('viewNote - metadata:', note.metadata);
+    console.log('viewNote - image_url:', note.metadata?.image_url);
+    console.log('viewNote - currentPublicToken:', this.currentPublicToken);
 
-        // Rewrite image URLs for public notebooks
-        const content = this.rewriteImageUrlsForPublic(note.content);
-        const renderedContent = marked.parse(content);
+    // Rewrite image URLs for public notebooks
+    const content = this.rewriteImageUrlsForPublic(note.content);
+    const renderedContent = marked.parse(content);
 
-        // 信息图错误提示 HTML
-        let infographicErrorHTML = '';
-        if (note.type === 'infograph' && note.metadata?.image_error) {
-            const fullPrompt = note.content + '\n\n**注意：无论来源是什么语言，请务必使用中文**';
-            const escapedPrompt = this.escapeHtml(fullPrompt);
-            const escapedError = this.escapeHtml(note.metadata.image_error);
+    // 信息图错误提示 HTML
+    let infographicErrorHTML = '';
+    if (note.type === 'infograph' && note.metadata?.image_error) {
+        const fullPrompt = note.content + '\n\n**注意：无论来源是什么语言，请务必使用中文**';
+        const escapedPrompt = this.escapeHtml(fullPrompt);
+        const escapedError = this.escapeHtml(note.metadata.image_error);
 
-            infographicErrorHTML = `
-                <div class="infographic-error-banner">
-                    <div class="error-banner-content">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="10" cy="10" r="8"/>
-                            <line x1="10" y1="7" x2="10" y2="13"/>
-                            <line x1="10" y1="16" x2="10" y2="16"/>
-                        </svg>
-                        <div>
-                            <strong>图片生成失败</strong>
-                            <p>${escapedError}</p>
-                        </div>
-                    </div>
-                    <div class="error-banner-prompt">
-                        <strong>生成的 Prompt（可用于手动生成）：</strong>
-                        <pre>${escapedPrompt}</pre>
+        infographicErrorHTML = `
+            <div class="infographic-error-banner">
+                <div class="error-banner-content">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="10" cy="10" r="8"/>
+                        <line x1="10" y1="7" x2="10" y2="13"/>
+                        <line x1="10" y1="16" x2="10" y2="16"/>
+                    </svg>
+                    <div>
+                        <strong>图片生成失败</strong>
+                        <p>${escapedError}</p>
                     </div>
                 </div>
-            `;
-        }
+                <div class="error-banner-prompt">
+                    <strong>生成的 Prompt（可用于手动生成）：</strong>
+                    <pre>${escapedPrompt}</pre>
+                </div>
+            </div>
+        `;
+    }
 
-        // Rewrite image URL for infographics if present
-        const originalImageUrl = note.metadata?.image_url || null;
-        const infographicImageUrl = originalImageUrl
-            ? this.rewriteImageUrlsForPublic(originalImageUrl)
-            : null;
+    // Rewrite image URL for infographics if present
+    const originalImageUrl = note.metadata?.image_url || null;
+    const infographicImageUrl = originalImageUrl
+        ? this.rewriteImageUrlsForPublic(originalImageUrl)
+        : null;
 
-        console.log('viewNote - originalImageUrl:', originalImageUrl);
-        console.log('viewNote - infographicImageUrl:', infographicImageUrl);
+    console.log('viewNote - originalImageUrl:', originalImageUrl);
+    console.log('viewNote - infographicImageUrl:', infographicImageUrl);
 
-        const infographicHTML = infographicImageUrl
-            ? `<div class="infographic-container">
-                 <img src="${infographicImageUrl}" alt="Infographic" class="infographic-image" onerror="console.error('Failed to load image:', this.src)">
->>>>>>> origin/master
-                 <div class="infographic-actions">
-                    <a href="${infographicImageUrl}" target="_blank" class="btn-text">查看大图</a>
-                 </div>
-               </div>`
-      : "";
+    const infographicHTML = infographicImageUrl
+        ? `<div class="infographic-container">
+             <img src="${infographicImageUrl}" alt="Infographic" class="infographic-image" onerror="console.error('Failed to load image:', this.src)">
+             <div class="infographic-actions">
+                <a href="${infographicImageUrl}" target="_blank" class="btn-text">查看大图</a>
+             </div>
+           </div>`
+        : "";
 
-<<<<<<< HEAD
     // PPT Slider HTML
     let pptSliderHTML = "";
     if (note.metadata?.slides && note.metadata.slides.length > 0) {
-      const slides = note.metadata.slides;
+      const slides = note.metadata.slides.map(src => {
+        const rewritten = this.rewriteImageUrlsForPublic(src);
+        console.log('viewNote - slide original:', src, 'rewritten:', rewritten);
+        return rewritten;
+      });
       pptSliderHTML = `
                 <div class="ppt-viewer-container" id="pptViewer">
                     <div class="ppt-slides-wrapper">
@@ -2573,27 +2445,10 @@ class OpenNotebook {
                             <div class="ppt-slide ${
                               index === 0 ? "active" : ""
                             }" data-index="${index}">
-                                <img src="${src}" alt="Slide ${index + 1}">
-                                <div class="ppt-slide-counter">${index + 1} / ${
-                              slides.length
-                            }</div>
-=======
-        // PPT Slider HTML
-        let pptSliderHTML = '';
-        if (note.metadata?.slides && note.metadata.slides.length > 0) {
-            const slides = note.metadata.slides.map(src => {
-                const rewritten = this.rewriteImageUrlsForPublic(src);
-                console.log('viewNote - slide original:', src, 'rewritten:', rewritten);
-                return rewritten;
-            });
-            pptSliderHTML = `
-                <div class="ppt-viewer-container" id="pptViewer">
-                    <div class="ppt-slides-wrapper">
-                        ${slides.map((src, index) => `
-                            <div class="ppt-slide ${index === 0 ? 'active' : ''}" data-index="${index}">
                                 <img src="${src}" alt="Slide ${index + 1}" onerror="console.error('Failed to load slide:', this.src)">
-                                <div class="ppt-slide-counter">${index + 1} / ${slides.length}</div>
->>>>>>> origin/master
+                                <div class="ppt-slide-counter">${index + 1} / ${
+                                slides.length
+                              }</div>
                             </div>
                         `
                           )
@@ -2785,22 +2640,8 @@ class OpenNotebook {
               }
             }
 
-<<<<<<< HEAD
             sanitized = processedLines.join("\n");
           }
-=======
-        // Render MathJax if available
-        if (window.MathJax && window.MathJax.typesetPromise) {
-            try {
-                await MathJax.typesetPromise([document.querySelector('.note-view-content')]);
-            } catch (e) {
-                console.warn('MathJax rendering error:', e);
-            }
-        }
-
-        // Switch to note tab
-        this.switchPanelTab('note');
->>>>>>> origin/master
 
           return sanitized;
         };
@@ -2837,6 +2678,15 @@ class OpenNotebook {
       } catch (err) {
         console.error("Mermaid general error:", err);
       }
+    }
+
+    // Render MathJax if available
+    if (window.MathJax && window.MathJax.typesetPromise) {
+        try {
+            await MathJax.typesetPromise([document.querySelector('.note-view-content')]);
+        } catch (e) {
+            console.warn('MathJax rendering error:', e);
+        }
     }
 
     // Switch to note tab
@@ -3048,62 +2898,19 @@ class OpenNotebook {
   }
 
   async handleChat(e) {
-    e.preventDefault();
-
-    if (!this.currentNotebook) {
-      this.showError("请先选择一个笔记本");
-      return;
-    }
+    if (e) e.preventDefault();
+    if (!this.currentNotebook) return;
 
     const input = document.getElementById("chatInput");
-    const message = input.value.trim();
+    const content = input.value.trim();
+    if (!content) return;
 
-    if (!message) return;
-
-    this.addMessage("user", message);
     input.value = "";
-
-    const sources = await this.api(
-      `/notebooks/${this.currentNotebook.id}/sources`
-    );
-    if (sources.length === 0) {
-      this.addMessage("assistant", "请先为笔记本添加一些来源。");
-      return;
-    }
-
+    this.addMessage("user", content);
     this.setStatus("思考中...");
 
-    // Add typing indicator
     const typingId = "typing-" + Date.now();
-    const chatContainer = document.getElementById("chatMessages");
-    const typingHTML = `
-        <div class="message-wrapper assistant" id="${typingId}">
-            <div class="chat-message" data-role="assistant">
-                <div class="message-avatar">AI</div>
-                <div class="message-content">
-                    <div class="typing-indicator">
-                        <div class="typing-dot"></div>
-                        <div class="typing-dot"></div>
-                        <div class="typing-dot"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Check if we need to wrap it in message-wrapper structure like others?
-    // Looking at addMessage structure:
-    // It clones a template. Let's stick to using a temporary message with special content if possible, 
-    // or manually injecting HTML that matches the structure.
-    // The previous addMessage implementation uses template.
-    // Let's manually append a simplified structure that matches existing CSS or the typing-indicator CSS we just added.
-    
-    // Actually, let's just append the typing indicator directly to container for simplicity, 
-    // but styled to look like a message.
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = typingHTML;
-    chatContainer.appendChild(tempDiv.firstElementChild);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    this.addMessage("assistant", "...", [], typingId);
 
     try {
       const response = await this.api(
@@ -3111,13 +2918,12 @@ class OpenNotebook {
         {
           method: "POST",
           body: JSON.stringify({
-            message: message,
+            message: content,
             session_id: this.currentChatSession || undefined,
           }),
         }
       );
 
-      // Remove typing indicator
       const typingEl = document.getElementById(typingId);
       if (typingEl) typingEl.remove();
 
@@ -3125,10 +2931,9 @@ class OpenNotebook {
       this.currentChatSession = response.session_id;
       this.setStatus("就绪");
     } catch (error) {
-      // Remove typing indicator
       const typingEl = document.getElementById(typingId);
       if (typingEl) typingEl.remove();
-      
+
       this.addMessage("assistant", `错误: ${error.message}`);
       this.setStatus("错误");
     }
@@ -3239,73 +3044,63 @@ class OpenNotebook {
     return date.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
   }
 
+  rewriteImageUrlsForPublic(content) {
+    if (!content || !this.currentPublicToken) return content;
+    // Rewrite /api/notes/image/ to /public/notes/image/ and append public token
+    return content.replace(/\/api\/notes\/image\/([a-f0-9-]+)/g, (match, id) => {
+        return `/public/notes/image/${id}?token=${this.currentPublicToken}`;
+    });
+  }
+
+  escapeHtml(unsafe) {
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+  }
+
   async updateCurrentNotebookCounts() {
     if (!this.currentNotebook) return;
 
     const [sources, notes] = await Promise.all([
       this.api(`/notebooks/${this.currentNotebook.id}/sources`),
-      this.api(`/notebooks/${this.currentNotebook.id}/notes`)
+      this.api(`/notebooks/${this.currentNotebook.id}/notes`),
     ]);
 
-    const notebookCard = document.querySelector(`.notebook-card[data-id="${this.currentNotebook.id}"]`);
+    const notebookCard = document.querySelector(
+      `.notebook-card[data-id="${this.currentNotebook.id}"]`
+    );
     if (notebookCard) {
-        notebookCard.querySelector('.stat-sources').textContent = `${sources.length} 来源`;
-        notebookCard.querySelector('.stat-notes').textContent = `${notes.length} 笔记`;
+      notebookCard.querySelector(".stat-sources").textContent = `${sources.length} 来源`;
+      notebookCard.querySelector(".stat-notes").textContent = `${notes.length} 笔记`;
     }
   }
 
-  showError(message) {
-      this.setStatus(`错误: ${message}`);
-      this.showToast(message, 'error');
-  }
-
-  showWarn(message) {
-      this.showToast(message, 'warn');
-  }
-
-  updateFooter() {
-      const sourceCount = document.querySelectorAll('.source-card').length;
-      const noteCount = document.querySelectorAll('.note-item').length;
-      document.getElementById('footerStats').textContent = `${sourceCount} 来源 · ${noteCount} 笔记`;
-  }
-
-  formatDate(dateString) {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diff = now - date;
-
-      if (diff < 60000) return '刚刚';
-      if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
-      if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
-
-      return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' });
-  }
-
   // 通用 toast 提示方法
-  showToast(message, type = 'error') {
-      const colors = {
-          error: 'var(--accent-red)',
-          warn: 'var(--accent-orange)',
-          success: 'var(--accent-green)'
-      };
+  showToast(message, type = "error") {
+    const colors = {
+      error: "var(--accent-red)",
+      warn: "var(--accent-orange)",
+      success: "var(--accent-green)",
+    };
 
-      const toast = document.createElement('div');
-      toast.className = `${type}-toast`;
-      toast.style.cssText = `
+    const toast = document.createElement("div");
+    toast.className = `${type}-toast`;
+    toast.style.cssText = `
           position: fixed; bottom: 60px; right: 20px; padding: 12px 20px;
           background: ${colors[type]}; color: white; font-family: var(--font-mono);
           font-size: 0.75rem; border-radius: 4px; box-shadow: var(--shadow-medium);
           animation: slideIn 0.3s ease; z-index: 3000; white-space: pre-wrap; max-width: 400px;
       `;
-      toast.textContent = message;
-      document.body.appendChild(toast);
+    toast.textContent = message;
+    document.body.appendChild(toast);
 
-      setTimeout(() => {
-          toast.style.opacity = '0';
-          setTimeout(() => toast.remove(), 300);
-      }, 5000);
-  }
-    }
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      setTimeout(() => toast.remove(), 300);
+    }, 5000);
   }
 }
 

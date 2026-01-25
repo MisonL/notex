@@ -164,22 +164,27 @@ func (s *Server) setupRoutes() {
 	golog.Info("Registering /api/files/:filename route")
 	s.http.GET("/api/files/:filename", AuditMiddlewareLite(), OptionalAuthMiddleware(s.cfg.JWTSecret), s.handleServeFile)
 
-	// API routes
+	// Public API routes
 	api := s.http.Group("/api")
 	api.Use(AuditMiddlewareLite())
-	api.Use(AuthMiddleware(s.cfg.JWTSecret)) // Apply JWT Auth
 	{
-		// Health check
 		api.GET("/health", s.handleHealth)
-		api.GET("/config", s.handleConfig)
-		api.POST("/config", s.handleUpdateConfig)
-		api.GET("/models", s.handleListModels)
+	}
+
+	// Authenticated API routes
+	apiAuth := s.http.Group("/api")
+	apiAuth.Use(AuditMiddlewareLite())
+	apiAuth.Use(AuthMiddleware(s.cfg.JWTSecret)) // Apply JWT Auth
+	{
+		apiAuth.GET("/config", s.handleConfig)
+		apiAuth.POST("/config", s.handleUpdateConfig)
+		apiAuth.GET("/models", s.handleListModels)
 
 		// Auth API (get current user)
-		api.GET("/auth/me", s.auth.HandleMe)
+		apiAuth.GET("/auth/me", s.auth.HandleMe)
 
 		// Notebook routes
-		notebooks := api.Group("/notebooks")
+		notebooks := apiAuth.Group("/notebooks")
 		{
 			notebooks.GET("", s.handleListNotebooks)
 			notebooks.GET("/stats", s.handleListNotebooksWithStats)
